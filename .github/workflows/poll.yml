@@ -1,0 +1,38 @@
+name: poll-traffic
+
+on:
+  schedule:
+    - cron: "*/30 * * * *"
+  workflow_dispatch: {}
+
+concurrency:
+  group: poll-traffic
+  cancel-in-progress: false
+
+jobs:
+  poll:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - run: node scripts/poll.mjs
+        env:
+          MAPBOX_TOKEN: ${{ secrets.MAPBOX_TOKEN }}
+
+      - name: Commit if changed
+        run: |
+          git config user.name 'Noel Turlington'
+          git config user.email 'nturl505@gmail.com'
+          git add data/
+          if git diff --cached --quiet; then
+            echo 'no changes'
+          else
+            git commit -m "log: $(date -u +%FT%TZ)"
+            git push
+          fi

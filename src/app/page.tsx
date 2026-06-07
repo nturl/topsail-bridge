@@ -5,6 +5,7 @@ import type { Forecast, Place } from "@/lib/types";
 import { DEFAULT_ORIGIN, DEFAULT_DEST } from "@/lib/places";
 import { ForecastChart } from "@/components/ForecastChart";
 import { RouteControls } from "@/components/RouteControls";
+import { Heatmap } from "@/components/Heatmap";
 
 const LS_KEY = "bw.route.v1";
 
@@ -172,6 +173,13 @@ export default function Page() {
           <ForecastChart forecast={forecast} />
         </section>
       )}
+
+      <section
+        className="animate-fade-up mt-5 rounded-3xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900"
+        style={{ animationDelay: "180ms" }}
+      >
+        <Heatmap />
+      </section>
 
       <section className="mt-5 space-y-3">
         <RouteControls origin={route.origin} dest={route.dest} onApply={applyRoute} onReset={resetRoute} />
