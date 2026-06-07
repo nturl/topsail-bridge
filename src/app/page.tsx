@@ -6,6 +6,7 @@ import { DEFAULT_ORIGIN, DEFAULT_DEST } from "@/lib/places";
 import { ForecastChart } from "@/components/ForecastChart";
 import { RouteControls } from "@/components/RouteControls";
 import { Heatmap } from "@/components/Heatmap";
+import { Conditions } from "@/components/Conditions";
 
 const LS_KEY = "bw.route.v1";
 
@@ -157,6 +158,13 @@ export default function Page() {
               )}
           </>
         )}
+      </section>
+
+      <section
+        className="animate-fade-up mt-5 rounded-3xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900"
+        style={{ animationDelay: "100ms" }}
+      >
+        <Conditions />
       </section>
 
       {hasCurve && forecast && (
