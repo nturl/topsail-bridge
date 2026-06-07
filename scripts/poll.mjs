@@ -12,7 +12,7 @@ if (!TOKEN) {
 }
 
 // Canonical route. Keep in sync with src/lib/places.ts (DEFAULT_ORIGIN/DEST).
-const O = { lng: -77.628865, lat: 34.366405 }; // Topsail Beach
+const O = { lng: -77.60552, lat: 34.38541 }; // 718 N Anderson Blvd, Topsail Beach
 const D = { lng: -77.605212, lat: 34.450868 }; // Harris Teeter, Hampstead
 const TZ = "America/New_York";
 

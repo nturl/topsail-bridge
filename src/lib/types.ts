@@ -19,3 +19,15 @@ export type Forecast = {
   best: ForecastPoint | null;
   worst: ForecastPoint | null;
 };
+
+export type Incident = {
+  id: string;
+  type: string;
+  roads: string[];
+  direction: string | null;
+  description: string;
+};
+
+export type Weather = { tempF: number; precipIn: number; code: number; windMph: number } | null;
+
+export type ConditionsData = { incidents: Incident[]; omitted?: number; weather: Weather };

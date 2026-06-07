@@ -63,6 +63,11 @@ export function Heatmap() {
   if (!data || !data.cells.length) return null;
   const norm = (v: number) => (max === min ? 0.5 : (v - min) / (max - min));
 
+  const todayCells = data.cells.filter((c) => c.dow === now.dow);
+  const bestToday = todayCells.length
+    ? todayCells.reduce((a, b) => (b.minutes < a.minutes ? b : a))
+    : null;
+
   return (
     <div>
       <div className="mb-3 flex items-center justify-between">
@@ -122,6 +127,11 @@ export function Heatmap() {
                 ({sel.source === "actual" ? `${sel.samples} reading${sel.samples === 1 ? "" : "s"}` : "predicted"})
               </span>
             </span>
+          ) : bestToday ? (
+            <span>
+              <span className="font-medium text-emerald-600 dark:text-emerald-400">Best today</span> · around{" "}
+              {hourLabel(bestToday.hod)} ({bestToday.minutes} min)
+            </span>
           ) : (
             <span className="text-slate-400">Tap a cell for detail</span>
           )}
@@ -138,7 +148,7 @@ export function Heatmap() {
 
       <p className="mt-2 text-[11px] leading-relaxed text-slate-400">
         Dimmed cells are Mapbox predictions; solid cells are measured. {data.totalActual} live reading
-        {data.totalActual === 1 ? "" : "s"} logged so far — the grid sharpens as more come in.
+        {data.totalActual === 1 ? "" : "s"} logged so far. The grid sharpens as more come in.
       </p>
     </div>
   );

@@ -12,7 +12,7 @@ if (!TOKEN) {
   process.exit(1);
 }
 
-const O = { lng: -77.628865, lat: 34.366405 };
+const O = { lng: -77.60552, lat: 34.38541 }; // 718 N Anderson Blvd, Topsail Beach
 const D = { lng: -77.605212, lat: 34.450868 };
 const TZ = "America/New_York";
 const coords = `${O.lng},${O.lat};${D.lng},${D.lat}`;
