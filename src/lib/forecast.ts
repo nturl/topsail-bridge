@@ -35,6 +35,13 @@ export function nyClock(date: Date): string {
   }).format(date);
 }
 
+// A guaranteed off-peak time (tomorrow 5am, local) to anchor a free-flow baseline.
+function freeFlowDepartAt(): string {
+  const t = new Date(Date.now() + 24 * 60 * 60 * 1000);
+  const p = nyParts(t);
+  return `${p.year}-${p.month}-${p.day}T05:00`;
+}
+
 // One traffic-aware route lookup. departAt omitted => live conditions.
 export async function routeDuration(
   o: LngLat,
@@ -63,6 +70,9 @@ export async function buildForecast(
   const start = new Date();
   const offsets: number[] = [];
   for (let m = 0; m <= horizonMin; m += stepMin) offsets.push(m);
+
+  // Kick off the free-flow probe in parallel with the forecast points.
+  const freeFlowPromise = routeDuration(o, d, freeFlowDepartAt());
 
   const raw = await Promise.all(
     offsets.map(async (off) => {
@@ -95,12 +105,16 @@ export async function buildForecast(
     ? valid.reduce((a, b) => (b.minutes > a.minutes ? b : a))
     : null;
 
+  const freeFlowRes = await freeFlowPromise;
+  const freeFlow = freeFlowRes ? Math.round(freeFlowRes.minutes) : null;
+
   return {
     generatedAt: start.toISOString(),
     origin: o,
     dest: d,
     distanceMi: raw[0]?.distanceMi ?? null,
     now: points[0]?.minutes ?? null,
+    freeFlow,
     points,
     best,
     worst,

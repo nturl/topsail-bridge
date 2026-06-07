@@ -15,6 +15,7 @@ export type Forecast = {
   dest: LngLat;
   distanceMi: number | null;
   now: number | null;
+  freeFlow: number | null; // off-peak baseline; the "clear run" time
   points: ForecastPoint[];
   best: ForecastPoint | null;
   worst: ForecastPoint | null;

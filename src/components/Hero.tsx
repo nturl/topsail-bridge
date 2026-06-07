@@ -62,7 +62,19 @@ export function Hero({
         </div>
       )}
 
-      <p className="mt-6 text-[15px] font-medium leading-snug text-slate-800 dark:text-slate-100">
+      {forecast?.freeFlow != null && now != null && (
+        <p className="mt-3 text-xs text-slate-500 dark:text-slate-400">
+          A clear run is{" "}
+          <span className="font-medium text-slate-700 dark:text-slate-200">{forecast.freeFlow} min</span>. The bridge is
+          adding about{" "}
+          <span className="font-medium text-slate-700 dark:text-slate-200">
+            {Math.max(0, now - forecast.freeFlow)} min
+          </span>{" "}
+          right now.
+        </p>
+      )}
+
+      <p className="mt-5 text-[15px] font-medium leading-snug text-slate-800 dark:text-slate-100">
         {call.headline}
       </p>
       {call.notes.length > 0 && (

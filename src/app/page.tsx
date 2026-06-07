@@ -7,6 +7,7 @@ import { Hero } from "@/components/Hero";
 import { ForecastChart } from "@/components/ForecastChart";
 import { Conditions } from "@/components/Conditions";
 import { Heatmap } from "@/components/Heatmap";
+import { RouteMap } from "@/components/RouteMap";
 import { RouteControls } from "@/components/RouteControls";
 
 const LS_KEY = "bw.route.v1";
@@ -123,6 +124,15 @@ export default function Page() {
         </div>
 
         <div className="space-y-5">
+          <section className={CARD} style={{ animationDelay: "80ms" }}>
+            <div className="mb-3 flex items-center justify-between">
+              <h2 className="text-sm font-medium text-slate-600 dark:text-slate-300">The route</h2>
+              <span className="flex items-center gap-1 text-xs text-slate-400">
+                <span className="inline-block h-2 w-2 rounded-full bg-rose-500" /> bridge
+              </span>
+            </div>
+            <RouteMap origin={route.origin} dest={route.dest} />
+          </section>
           <section className={CARD} style={{ animationDelay: "100ms" }}>
             <Conditions data={conditions} />
           </section>
