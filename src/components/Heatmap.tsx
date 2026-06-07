@@ -1,6 +1,7 @@
 "use client";
 
 import { Fragment, useEffect, useMemo, useState } from "react";
+import type { LngLat } from "@/lib/types";
 
 type Cell = {
   dow: number;
@@ -9,7 +10,7 @@ type Cell = {
   source: "actual" | "typical";
   samples: number;
 };
-type History = { hours: number[]; cells: Cell[]; totalActual: number };
+type History = { hours: number[]; cells: Cell[]; totalActual: number; canonical: boolean };
 
 const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
@@ -36,39 +37,63 @@ function nowCell(): { dow: number; hod: number } {
   return { dow: DAYS.indexOf(wd), hod };
 }
 
-export function Heatmap({ dir = "out" }: { dir?: "out" | "back" }) {
+export function Heatmap({ o, d, dir }: { o: LngLat; d: LngLat; dir: "out" | "back" }) {
   const [data, setData] = useState<History | null>(null);
   const [sel, setSel] = useState<Cell | null>(null);
   const now = useMemo(nowCell, []);
+  const key = `${o.lng},${o.lat};${d.lng},${d.lat}`;
 
   useEffect(() => {
     setData(null);
     setSel(null);
-    fetch(`/api/history?dir=${dir}`)
+    let cancelled = false;
+    fetch(`/api/history?o=${o.lng},${o.lat}&d=${d.lng},${d.lat}`)
       .then((r) => r.json())
-      .then(setData)
+      .then((j) => {
+        if (!cancelled) setData(j);
+      })
       .catch(() => {});
-  }, [dir]);
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key]);
 
-  const { byKey, min, max } = useMemo(() => {
+  // Anchor the color scale to the 90th percentile so a single slow cell doesn't
+  // flatten everything else to green.
+  const { byKey, lo, hi } = useMemo(() => {
     const m = new Map<string, Cell>();
-    let lo = Infinity;
-    let hi = -Infinity;
+    const vals: number[] = [];
     for (const c of data?.cells ?? []) {
       m.set(`${c.dow}:${c.hod}`, c);
-      if (c.minutes < lo) lo = c.minutes;
-      if (c.minutes > hi) hi = c.minutes;
+      vals.push(c.minutes);
     }
-    return { byKey: m, min: lo, max: hi };
+    vals.sort((a, b) => a - b);
+    const low = vals[0] ?? 0;
+    const high = Math.max(vals[Math.floor(vals.length * 0.9)] ?? low, low + 1);
+    return { byKey: m, lo: low, hi: high };
   }, [data]);
 
-  if (!data || !data.cells.length) return null;
-  const norm = (v: number) => (max === min ? 0.5 : (v - min) / (max - min));
+  const subtext = dir === "out" ? "leaving the island" : "coming back";
 
+  if (!data) {
+    return (
+      <div>
+        <div className="mb-3 flex items-center justify-between">
+          <h2 className="text-sm font-medium text-slate-600 dark:text-slate-300">Weekly rhythm</h2>
+          <span className="text-xs text-slate-400">{subtext}</span>
+        </div>
+        <div className="flex h-44 animate-pulse items-center justify-center rounded-xl bg-slate-100 text-xs text-slate-400 dark:bg-slate-800">
+          Building this route&apos;s weekly pattern…
+        </div>
+      </div>
+    );
+  }
+  if (!data.cells.length) return null;
+
+  const norm = (v: number) => Math.max(0, Math.min(1, (v - lo) / (hi - lo)));
   const todayCells = data.cells.filter((c) => c.dow === now.dow);
-  const bestToday = todayCells.length
-    ? todayCells.reduce((a, b) => (b.minutes < a.minutes ? b : a))
-    : null;
+  const bestToday = todayCells.length ? todayCells.reduce((a, b) => (b.minutes < a.minutes ? b : a)) : null;
   const busiest = data.cells.reduce((a, b) => (b.minutes > a.minutes ? b : a));
   const quietest = data.cells.reduce((a, b) => (b.minutes < a.minutes ? b : a));
 
@@ -76,19 +101,19 @@ export function Heatmap({ dir = "out" }: { dir?: "out" | "back" }) {
     <div>
       <div className="mb-3 flex items-center justify-between">
         <h2 className="text-sm font-medium text-slate-600 dark:text-slate-300">Weekly rhythm</h2>
-        <span className="text-xs text-slate-400">{dir === "out" ? "leaving the island" : "coming back"}</span>
+        <span className="text-xs text-slate-400">{subtext}</span>
       </div>
 
       <div className="grid gap-[3px]" style={{ gridTemplateColumns: "1.7rem repeat(7, minmax(0, 1fr))" }}>
         <div />
-        {DAYS.map((d, i) => (
+        {DAYS.map((day, i) => (
           <div
-            key={d}
+            key={day}
             className={`text-center text-[10px] ${
               i === now.dow ? "font-semibold text-sky-600 dark:text-sky-400" : "text-slate-400"
             }`}
           >
-            {d}
+            {day}
           </div>
         ))}
         {data.hours.map((h) => (
@@ -104,12 +129,10 @@ export function Heatmap({ dir = "out" }: { dir?: "out" | "back" }) {
                   key={dow}
                   type="button"
                   onClick={() => c && setSel(c)}
-                  className={`h-4 rounded-[3px] transition ${
-                    isNow ? "ring-2 ring-slate-900 dark:ring-white" : ""
-                  }`}
+                  className={`h-4 rounded-[3px] transition ${isNow ? "ring-2 ring-slate-900 dark:ring-white" : ""}`}
                   style={{
                     background: c ? heatColor(norm(c.minutes)) : "transparent",
-                    opacity: c ? (c.source === "actual" ? 1 : 0.55) : 0.15,
+                    opacity: c ? (c.source === "actual" ? 1 : 0.6) : 0.15,
                   }}
                   aria-label={c ? `${DAYS[dow]} ${hourLabel(h)}: ${c.minutes} minutes` : undefined}
                 />
@@ -151,12 +174,20 @@ export function Heatmap({ dir = "out" }: { dir?: "out" | "back" }) {
       </div>
 
       <p className="mt-3 text-[11px] leading-relaxed text-slate-500 dark:text-slate-400">
-        Quietest this week: <span className="text-emerald-600 dark:text-emerald-400">{DAYS[quietest.dow]} ~{hourLabel(quietest.hod)}</span> ({quietest.minutes} min).
-        Busiest: <span className="text-rose-600 dark:text-rose-400">{DAYS[busiest.dow]} ~{hourLabel(busiest.hod)}</span> ({busiest.minutes} min).
+        Quietest:{" "}
+        <span className="text-emerald-600 dark:text-emerald-400">
+          {DAYS[quietest.dow]} ~{hourLabel(quietest.hod)}
+        </span>{" "}
+        ({quietest.minutes} min). Busiest:{" "}
+        <span className="text-rose-600 dark:text-rose-400">
+          {DAYS[busiest.dow]} ~{hourLabel(busiest.hod)}
+        </span>{" "}
+        ({busiest.minutes} min).
       </p>
       <p className="mt-1 text-[11px] leading-relaxed text-slate-400">
-        Dimmed cells are predictions; solid cells are measured. {data.totalActual} live reading
-        {data.totalActual === 1 ? "" : "s"} logged so far.
+        {data.canonical
+          ? `Dimmed cells are predictions; solid cells are measured. ${data.totalActual} live reading${data.totalActual === 1 ? "" : "s"} so far.`
+          : "Predicted from Mapbox traffic patterns for your route."}
       </p>
     </div>
   );

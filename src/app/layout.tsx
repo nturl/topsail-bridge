@@ -20,9 +20,13 @@ const instrumentSerif = Instrument_Serif({
   style: ["normal", "italic"],
 });
 
+const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "https://topsail-bridge.vercel.app";
+
 export const metadata: Metadata = {
-  title: "Bridge Watch",
-  description: "When to leave the island. Live and predicted traffic across the Surf City bridge.",
+  metadataBase: new URL(SITE_URL),
+  title: "Bridge Watch — Topsail Island traffic",
+  description:
+    "Know when to leave (and return to) Topsail Island. Live and predicted traffic across the Surf City bridge, a weekly rhythm, the live bridge cam, and NCDOT incidents.",
   applicationName: "Bridge Watch",
   appleWebApp: {
     capable: true,
@@ -31,6 +35,18 @@ export const metadata: Metadata = {
   },
   formatDetection: {
     telephone: false,
+  },
+  openGraph: {
+    title: "Bridge Watch — Topsail Island traffic",
+    description: "When to leave (and return to) Topsail Island, across the Surf City bridge.",
+    url: SITE_URL,
+    siteName: "Bridge Watch",
+    type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Bridge Watch — Topsail Island traffic",
+    description: "When to leave (and return to) Topsail Island, across the Surf City bridge.",
   },
 };
 

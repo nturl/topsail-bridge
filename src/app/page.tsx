@@ -8,7 +8,7 @@ import { ForecastChart } from "@/components/ForecastChart";
 import { Conditions } from "@/components/Conditions";
 import { Heatmap } from "@/components/Heatmap";
 import { RouteMap } from "@/components/RouteMap";
-import { RouteControls } from "@/components/RouteControls";
+import { RouteEditor } from "@/components/RouteEditor";
 
 const LS_KEY = "bw.route.v1";
 
@@ -31,6 +31,7 @@ const CARD =
 export default function Page() {
   const [route, setRoute] = useState<Route>({ origin: DEFAULT_ORIGIN, dest: DEFAULT_DEST });
   const [direction, setDirection] = useState<Direction>("out");
+  const [editing, setEditing] = useState(false);
   const [hydrated, setHydrated] = useState(false);
   const [forecast, setForecast] = useState<Forecast | null>(null);
   const [conditions, setConditions] = useState<ConditionsData | null>(null);
@@ -86,15 +87,6 @@ export default function Page() {
     }
   }
 
-  function resetRoute() {
-    setRoute({ origin: DEFAULT_ORIGIN, dest: DEFAULT_DEST });
-    try {
-      localStorage.removeItem(LS_KEY);
-    } catch {
-      /* ignore */
-    }
-  }
-
   const from = direction === "out" ? route.origin : route.dest;
   const to = direction === "out" ? route.dest : route.origin;
   const hasCurve = !!forecast && forecast.points.filter((p) => p.minutes != null).length > 1;
@@ -107,24 +99,46 @@ export default function Page() {
           <span className="text-xs text-slate-400">Surf City bridge</span>
         </div>
         <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-          {from.label} → {to.label}
+          When to leave (and return to) Topsail Island.
         </p>
       </header>
 
-      <div className="mb-6 inline-flex animate-fade-up rounded-full border border-slate-200 bg-white p-0.5 text-sm dark:border-slate-800 dark:bg-slate-900">
-        {(["out", "back"] as Direction[]).map((d) => (
-          <button
-            key={d}
-            onClick={() => setDirection(d)}
-            className={`rounded-full px-4 py-1.5 font-medium transition ${
-              direction === d
-                ? "bg-sky-600 text-white"
-                : "text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200"
-            }`}
-          >
-            {d === "out" ? "Leaving" : "Returning"}
-          </button>
-        ))}
+      {/* Prominent, obvious route control */}
+      <div className="mb-5 animate-fade-up space-y-3">
+        <button
+          onClick={() => setEditing(true)}
+          className="flex w-full items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-left shadow-sm transition hover:border-sky-300 dark:border-slate-800 dark:bg-slate-900 dark:hover:border-sky-700"
+        >
+          <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-sky-100 text-sky-700 dark:bg-sky-500/15 dark:text-sky-400">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M12 21s-7-5.5-7-11a7 7 0 1 1 14 0c0 5.5-7 11-7 11z" />
+              <circle cx="12" cy="10" r="2.5" />
+            </svg>
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block text-[11px] uppercase tracking-wide text-slate-400">Your route</span>
+            <span className="block truncate font-medium text-slate-800 dark:text-slate-100">
+              {from.label} → {to.label}
+            </span>
+          </span>
+          <span className="shrink-0 text-sm font-medium text-sky-600 dark:text-sky-400">Edit</span>
+        </button>
+
+        <div className="inline-flex rounded-full border border-slate-200 bg-white p-0.5 text-sm dark:border-slate-800 dark:bg-slate-900">
+          {(["out", "back"] as Direction[]).map((dval) => (
+            <button
+              key={dval}
+              onClick={() => setDirection(dval)}
+              className={`rounded-full px-4 py-1.5 font-medium transition ${
+                direction === dval
+                  ? "bg-sky-600 text-white"
+                  : "text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200"
+              }`}
+            >
+              {dval === "out" ? "Leaving" : "Returning"}
+            </button>
+          ))}
+        </div>
       </div>
 
       {error && <p className="mb-4 text-sm text-rose-600 dark:text-rose-400">{error}</p>}
@@ -159,27 +173,32 @@ export default function Page() {
             <Conditions data={conditions} />
           </section>
           <section className={CARD} style={{ animationDelay: "180ms" }}>
-            <Heatmap dir={direction} />
+            <Heatmap o={from} d={to} dir={direction} />
           </section>
         </div>
       </div>
 
-      <section className="mx-auto mt-6 max-w-md space-y-3">
-        <RouteControls origin={route.origin} dest={route.dest} onApply={applyRoute} onReset={resetRoute} />
-        <div className="flex items-center justify-between text-xs text-slate-400">
-          <button onClick={() => refresh(route, direction)} className="hover:text-slate-600 dark:hover:text-slate-200">
-            ↻ Refresh
-          </button>
-          <span>
-            {updatedAt
-              ? `Updated ${updatedAt.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}`
-              : ""}
-          </span>
-        </div>
-        <p className="pt-1 text-center text-[11px] leading-relaxed text-slate-400">
-          Traffic-aware estimates from Mapbox. Predictions blend live and historical patterns.
-        </p>
+      <section className="mt-6 flex items-center justify-between text-xs text-slate-400">
+        <button onClick={() => refresh(route, direction)} className="hover:text-slate-600 dark:hover:text-slate-200">
+          ↻ Refresh
+        </button>
+        <span>
+          {updatedAt
+            ? `Updated ${updatedAt.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}`
+            : ""}
+        </span>
       </section>
+      <p className="mt-2 text-center text-[11px] leading-relaxed text-slate-400">
+        Live + predicted traffic from Mapbox. Bridge cam by Surf City IGA, incidents from NCDOT DriveNC.
+      </p>
+
+      <RouteEditor
+        open={editing}
+        origin={route.origin}
+        dest={route.dest}
+        onApply={applyRoute}
+        onClose={() => setEditing(false)}
+      />
     </main>
   );
 }

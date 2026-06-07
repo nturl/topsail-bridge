@@ -1,10 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
-import typical from "@/data/typical.json";
+import { unstable_cache } from "next/cache";
+import bundled from "@/data/typical.json";
+import { DEFAULT_ORIGIN, DEFAULT_DEST, canonicalDir } from "@/lib/places";
+import { generateTypical } from "@/lib/mapbox";
+import type { LngLat } from "@/lib/types";
 
-// Actuals are committed by the cron to main; read them fresh (not bundled).
 const RAW = "https://raw.githubusercontent.com/nturl/topsail-bridge/main/data/log.ndjson";
 
-type Dir = "out" | "back";
 type Cell = {
   dow: number;
   hod: number;
@@ -13,46 +15,72 @@ type Cell = {
   samples: number;
 };
 
+// Predicted typical week for an arbitrary route, cached a week in Vercel's
+// Data Cache so each unique route is only generated once.
+const cachedTypical = unstable_cache(
+  async (oLng: number, oLat: number, dLng: number, dLat: number) =>
+    generateTypical({ lng: oLng, lat: oLat }, { lng: dLng, lat: dLat }),
+  ["typical-route-v1"],
+  { revalidate: 604_800 },
+);
+
 function median(a: number[]): number {
   const s = [...a].sort((x, y) => x - y);
   const m = Math.floor(s.length / 2);
   return s.length % 2 ? s[m] : Math.round((s[m - 1] + s[m]) / 2);
 }
 
-export async function GET(req: NextRequest) {
-  const dir: Dir = req.nextUrl.searchParams.get("dir") === "back" ? "back" : "out";
+function parse(s: string | null, fallback: LngLat): LngLat {
+  if (s) {
+    const [lng, lat] = s.split(",").map(Number);
+    if (Number.isFinite(lng) && Number.isFinite(lat)) return { lng, lat };
+  }
+  return fallback;
+}
 
+export async function GET(req: NextRequest) {
+  const sp = req.nextUrl.searchParams;
+  const o = parse(sp.get("o"), DEFAULT_ORIGIN);
+  const d = parse(sp.get("d"), DEFAULT_DEST);
+  const canon = canonicalDir(o, d);
+
+  const hours = bundled.hours as number[];
+  let grid: Record<string, Record<string, number>>;
   const actuals = new Map<string, number[]>();
   let totalActual = 0;
-  try {
-    const r = await fetch(RAW, { next: { revalidate: 600 } });
-    if (r.ok) {
-      const text = await r.text();
-      for (const line of text.split("\n")) {
-        const t = line.trim();
-        if (!t) continue;
-        try {
-          const rec = JSON.parse(t);
-          const recDir: Dir = rec.dir === "back" ? "back" : "out"; // legacy rows = out
-          if (recDir !== dir) continue;
-          if (typeof rec.dow === "number" && typeof rec.hod === "number" && typeof rec.min === "number") {
-            const k = `${rec.dow}:${rec.hod}`;
-            const arr = actuals.get(k) ?? [];
-            arr.push(rec.min);
-            actuals.set(k, arr);
-            totalActual++;
+
+  if (canon) {
+    grid = (bundled as Record<string, unknown>)[canon] as Record<string, Record<string, number>>;
+    try {
+      const r = await fetch(RAW, { next: { revalidate: 600 } });
+      if (r.ok) {
+        const text = await r.text();
+        for (const line of text.split("\n")) {
+          const t = line.trim();
+          if (!t) continue;
+          try {
+            const rec = JSON.parse(t);
+            const rd = rec.dir === "back" ? "back" : "out";
+            if (rd !== canon) continue;
+            if (typeof rec.dow === "number" && typeof rec.hod === "number" && typeof rec.min === "number") {
+              const k = `${rec.dow}:${rec.hod}`;
+              const arr = actuals.get(k) ?? [];
+              arr.push(rec.min);
+              actuals.set(k, arr);
+              totalActual++;
+            }
+          } catch {
+            /* skip */
           }
-        } catch {
-          /* skip malformed line */
         }
       }
+    } catch {
+      /* raw unavailable */
     }
-  } catch {
-    /* raw log not available yet; fall back to typical */
+  } else {
+    grid = await cachedTypical(o.lng, o.lat, d.lng, d.lat);
   }
 
-  const hours = typical.hours as number[];
-  const grid = (typical as Record<string, unknown>)[dir] as Record<string, Record<string, number>>;
   const cells: Cell[] = [];
   for (let dow = 0; dow < 7; dow++) {
     for (const hod of hours) {
@@ -67,7 +95,7 @@ export async function GET(req: NextRequest) {
   }
 
   return NextResponse.json(
-    { dir, hours, cells, totalActual, generatedAt: typical.generatedAt, route: typical.route },
+    { canonical: !!canon, hours, cells, totalActual },
     { headers: { "Cache-Control": "public, s-maxage=600, stale-while-revalidate=1800" } },
   );
 }

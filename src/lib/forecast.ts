@@ -1,7 +1,7 @@
 import type { Forecast, ForecastPoint, LngLat } from "./types";
 
 const TZ = "America/New_York";
-const TOKEN = process.env.NEXT_PUBLIC_MAPBOX_TOKEN ?? "";
+const TOKEN = process.env.MAPBOX_TOKEN ?? process.env.NEXT_PUBLIC_MAPBOX_TOKEN ?? "";
 
 function nyParts(date: Date): Record<string, string> {
   const fmt = new Intl.DateTimeFormat("en-CA", {

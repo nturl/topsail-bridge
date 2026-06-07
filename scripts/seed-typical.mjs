@@ -11,7 +11,7 @@ if (!TOKEN) {
   process.exit(1);
 }
 
-const O = { lng: -77.60552, lat: 34.38541 }; // 718 N Anderson Blvd, Topsail Beach
+const O = { lng: -77.545585, lat: 34.427278 }; // Surf City (canonical default)
 const D = { lng: -77.605212, lat: 34.450868 }; // Harris Teeter, Hampstead
 const TZ = "America/New_York";
 const HOURS = [];
@@ -78,7 +78,7 @@ for (let i = 0; i < tasks.length; i += BATCH) {
 const data = {
   generatedAt: start.toISOString(),
   tz: TZ,
-  route: { origin: O, dest: D, label: "Topsail Beach to Harris Teeter (Hampstead)" },
+  route: { origin: O, dest: D, label: "Surf City to Harris Teeter (Hampstead)" },
   hours: HOURS,
   out,
   back,
