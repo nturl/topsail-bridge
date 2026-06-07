@@ -36,17 +36,19 @@ function nowCell(): { dow: number; hod: number } {
   return { dow: DAYS.indexOf(wd), hod };
 }
 
-export function Heatmap() {
+export function Heatmap({ dir = "out" }: { dir?: "out" | "back" }) {
   const [data, setData] = useState<History | null>(null);
   const [sel, setSel] = useState<Cell | null>(null);
   const now = useMemo(nowCell, []);
 
   useEffect(() => {
-    fetch("/api/history")
+    setData(null);
+    setSel(null);
+    fetch(`/api/history?dir=${dir}`)
       .then((r) => r.json())
       .then(setData)
       .catch(() => {});
-  }, []);
+  }, [dir]);
 
   const { byKey, min, max } = useMemo(() => {
     const m = new Map<string, Cell>();
@@ -67,12 +69,14 @@ export function Heatmap() {
   const bestToday = todayCells.length
     ? todayCells.reduce((a, b) => (b.minutes < a.minutes ? b : a))
     : null;
+  const busiest = data.cells.reduce((a, b) => (b.minutes > a.minutes ? b : a));
+  const quietest = data.cells.reduce((a, b) => (b.minutes < a.minutes ? b : a));
 
   return (
     <div>
       <div className="mb-3 flex items-center justify-between">
         <h2 className="text-sm font-medium text-slate-600 dark:text-slate-300">Weekly rhythm</h2>
-        <span className="text-xs text-slate-400">leaving the island</span>
+        <span className="text-xs text-slate-400">{dir === "out" ? "leaving the island" : "coming back"}</span>
       </div>
 
       <div className="grid gap-[3px]" style={{ gridTemplateColumns: "1.7rem repeat(7, minmax(0, 1fr))" }}>
@@ -146,9 +150,13 @@ export function Heatmap() {
         </div>
       </div>
 
-      <p className="mt-2 text-[11px] leading-relaxed text-slate-400">
-        Dimmed cells are Mapbox predictions; solid cells are measured. {data.totalActual} live reading
-        {data.totalActual === 1 ? "" : "s"} logged so far. The grid sharpens as more come in.
+      <p className="mt-3 text-[11px] leading-relaxed text-slate-500 dark:text-slate-400">
+        Quietest this week: <span className="text-emerald-600 dark:text-emerald-400">{DAYS[quietest.dow]} ~{hourLabel(quietest.hod)}</span> ({quietest.minutes} min).
+        Busiest: <span className="text-rose-600 dark:text-rose-400">{DAYS[busiest.dow]} ~{hourLabel(busiest.hod)}</span> ({busiest.minutes} min).
+      </p>
+      <p className="mt-1 text-[11px] leading-relaxed text-slate-400">
+        Dimmed cells are predictions; solid cells are measured. {data.totalActual} live reading
+        {data.totalActual === 1 ? "" : "s"} logged so far.
       </p>
     </div>
   );

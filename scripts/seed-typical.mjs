@@ -1,7 +1,6 @@
-// One-time seed: builds a "typical week" baseline by asking Mapbox for its
-// predicted (depart_at) drive time for every hour of the next 7 days, one of
-// each weekday. Writes src/data/typical.json so the heatmap has full coverage
-// immediately; the live cron (poll.mjs) then sharpens cells with real data.
+// One-time seed: builds a "typical week" baseline for BOTH directions
+// (leaving the island and coming back) from Mapbox depart_at predictions, so
+// the heatmap has full coverage immediately. The live cron sharpens it.
 import { writeFileSync, mkdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -13,9 +12,8 @@ if (!TOKEN) {
 }
 
 const O = { lng: -77.60552, lat: 34.38541 }; // 718 N Anderson Blvd, Topsail Beach
-const D = { lng: -77.605212, lat: 34.450868 };
+const D = { lng: -77.605212, lat: 34.450868 }; // Harris Teeter, Hampstead
 const TZ = "America/New_York";
-const coords = `${O.lng},${O.lat};${D.lng},${D.lat}`;
 const HOURS = [];
 for (let h = 6; h <= 21; h++) HOURS.push(h);
 const DOW = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };
@@ -34,7 +32,7 @@ function nyParts(date) {
   return p;
 }
 
-async function predict(departStr) {
+async function predict(coords, departStr) {
   const url = `https://api.mapbox.com/directions/v5/mapbox/driving-traffic/${coords}?overview=false&access_token=${TOKEN}&depart_at=${encodeURIComponent(departStr)}`;
   const r = await fetch(url);
   if (!r.ok) return null;
@@ -44,40 +42,49 @@ async function predict(departStr) {
 
 const start = new Date();
 const tasks = [];
-// Days 1..7 from now = the next occurrence of each weekday, all in the future.
 for (let dayOffset = 1; dayOffset <= 7; dayOffset++) {
   const d = new Date(start.getTime() + dayOffset * 86_400_000);
   const p = nyParts(d);
   const dow = DOW[p.weekday];
   for (const h of HOURS) {
-    const departStr = `${p.year}-${p.month}-${p.day}T${String(h).padStart(2, "0")}:00`;
-    tasks.push({ dow, h, departStr });
+    tasks.push({ dow, h, departStr: `${p.year}-${p.month}-${p.day}T${String(h).padStart(2, "0")}:00` });
   }
 }
 
-const grid = {};
-for (let dow = 0; dow < 7; dow++) grid[dow] = {};
+const OUT = `${O.lng},${O.lat};${D.lng},${D.lat}`;
+const BACK = `${D.lng},${D.lat};${O.lng},${O.lat}`;
+const out = {};
+const back = {};
+for (let dow = 0; dow < 7; dow++) {
+  out[dow] = {};
+  back[dow] = {};
+}
 
-// Run in small batches to stay polite to the API.
 const BATCH = 8;
 for (let i = 0; i < tasks.length; i += BATCH) {
   const slice = tasks.slice(i, i + BATCH);
-  const results = await Promise.all(slice.map((t) => predict(t.departStr)));
+  const results = await Promise.all(
+    slice.flatMap((t) => [predict(OUT, t.departStr), predict(BACK, t.departStr)]),
+  );
   slice.forEach((t, j) => {
-    if (results[j] != null) grid[t.dow][t.h] = results[j];
+    const o = results[j * 2];
+    const b = results[j * 2 + 1];
+    if (o != null) out[t.dow][t.h] = o;
+    if (b != null) back[t.dow][t.h] = b;
   });
   console.log(`  ${Math.min(i + BATCH, tasks.length)}/${tasks.length}`);
 }
 
-const out = {
+const data = {
   generatedAt: start.toISOString(),
   tz: TZ,
-  route: { origin: O, dest: D, label: "Topsail Beach → Harris Teeter (Hampstead)" },
+  route: { origin: O, dest: D, label: "Topsail Beach to Harris Teeter (Hampstead)" },
   hours: HOURS,
-  grid,
+  out,
+  back,
 };
 
 const outDir = join(dirname(fileURLToPath(import.meta.url)), "..", "src", "data");
 mkdirSync(outDir, { recursive: true });
-writeFileSync(join(outDir, "typical.json"), JSON.stringify(out, null, 2));
-console.log("wrote src/data/typical.json");
+writeFileSync(join(outDir, "typical.json"), JSON.stringify(data, null, 2));
+console.log("wrote src/data/typical.json (both directions)");

@@ -13,6 +13,7 @@ import { RouteControls } from "@/components/RouteControls";
 const LS_KEY = "bw.route.v1";
 
 type Route = { origin: Place; dest: Place };
+type Direction = "out" | "back";
 
 function loadRoute(): Route {
   try {
@@ -29,6 +30,7 @@ const CARD =
 
 export default function Page() {
   const [route, setRoute] = useState<Route>({ origin: DEFAULT_ORIGIN, dest: DEFAULT_DEST });
+  const [direction, setDirection] = useState<Direction>("out");
   const [hydrated, setHydrated] = useState(false);
   const [forecast, setForecast] = useState<Forecast | null>(null);
   const [conditions, setConditions] = useState<ConditionsData | null>(null);
@@ -41,12 +43,14 @@ export default function Page() {
     setHydrated(true);
   }, []);
 
-  const refresh = useCallback(async (r: Route) => {
+  const refresh = useCallback(async (r: Route, dir: Direction) => {
+    const from = dir === "out" ? r.origin : r.dest;
+    const to = dir === "out" ? r.dest : r.origin;
     setLoading(true);
     setError(null);
     try {
-      const o = `${r.origin.lng},${r.origin.lat}`;
-      const d = `${r.dest.lng},${r.dest.lat}`;
+      const o = `${from.lng},${from.lat}`;
+      const d = `${to.lng},${to.lat}`;
       const [fRes, cRes] = await Promise.all([
         fetch(`/api/forecast?o=${o}&d=${d}`, { cache: "no-store" }),
         fetch(`/api/conditions`, { cache: "no-store" }),
@@ -63,14 +67,14 @@ export default function Page() {
   }, []);
 
   useEffect(() => {
-    if (hydrated) refresh(route);
-  }, [route, hydrated, refresh]);
+    if (hydrated) refresh(route, direction);
+  }, [route, direction, hydrated, refresh]);
 
   useEffect(() => {
     if (!hydrated) return;
-    const id = setInterval(() => refresh(route), 120_000);
+    const id = setInterval(() => refresh(route, direction), 120_000);
     return () => clearInterval(id);
-  }, [route, hydrated, refresh]);
+  }, [route, direction, hydrated, refresh]);
 
   function applyRoute(origin: Place, dest: Place) {
     const r = { origin, dest };
@@ -91,19 +95,37 @@ export default function Page() {
     }
   }
 
+  const from = direction === "out" ? route.origin : route.dest;
+  const to = direction === "out" ? route.dest : route.origin;
   const hasCurve = !!forecast && forecast.points.filter((p) => p.minutes != null).length > 1;
 
   return (
     <main className="mx-auto w-full max-w-5xl px-5 py-8 md:py-12">
-      <header className="mb-7 animate-fade-up">
+      <header className="mb-5 animate-fade-up">
         <div className="flex items-baseline justify-between">
           <h1 className="font-serif text-4xl tracking-tight md:text-5xl">Bridge Watch</h1>
           <span className="text-xs text-slate-400">Surf City bridge</span>
         </div>
         <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-          {route.origin.label} → {route.dest.label}
+          {from.label} → {to.label}
         </p>
       </header>
+
+      <div className="mb-6 inline-flex animate-fade-up rounded-full border border-slate-200 bg-white p-0.5 text-sm dark:border-slate-800 dark:bg-slate-900">
+        {(["out", "back"] as Direction[]).map((d) => (
+          <button
+            key={d}
+            onClick={() => setDirection(d)}
+            className={`rounded-full px-4 py-1.5 font-medium transition ${
+              direction === d
+                ? "bg-sky-600 text-white"
+                : "text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200"
+            }`}
+          >
+            {d === "out" ? "Leaving" : "Returning"}
+          </button>
+        ))}
+      </div>
 
       {error && <p className="mb-4 text-sm text-rose-600 dark:text-rose-400">{error}</p>}
 
@@ -131,13 +153,13 @@ export default function Page() {
                 <span className="inline-block h-2 w-2 rounded-full bg-rose-500" /> bridge
               </span>
             </div>
-            <RouteMap origin={route.origin} dest={route.dest} />
+            <RouteMap origin={from} dest={to} />
           </section>
           <section className={CARD} style={{ animationDelay: "100ms" }}>
             <Conditions data={conditions} />
           </section>
           <section className={CARD} style={{ animationDelay: "180ms" }}>
-            <Heatmap />
+            <Heatmap dir={direction} />
           </section>
         </div>
       </div>
@@ -145,7 +167,7 @@ export default function Page() {
       <section className="mx-auto mt-6 max-w-md space-y-3">
         <RouteControls origin={route.origin} dest={route.dest} onApply={applyRoute} onReset={resetRoute} />
         <div className="flex items-center justify-between text-xs text-slate-400">
-          <button onClick={() => refresh(route)} className="hover:text-slate-600 dark:hover:text-slate-200">
+          <button onClick={() => refresh(route, direction)} className="hover:text-slate-600 dark:hover:text-slate-200">
             ↻ Refresh
           </button>
           <span>
