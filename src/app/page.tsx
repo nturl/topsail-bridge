@@ -146,6 +146,9 @@ export default function Page() {
       <div className="grid gap-5 lg:grid-cols-2 lg:items-start">
         <div className="space-y-5">
           <Hero forecast={forecast} conditions={conditions} loading={loading} />
+          <section className={CARD} style={{ animationDelay: "100ms" }}>
+            <Conditions data={conditions} />
+          </section>
           {hasCurve && forecast && (
             <section className={CARD} style={{ animationDelay: "120ms" }}>
               <div className="mb-1 flex items-center justify-between">
@@ -168,9 +171,6 @@ export default function Page() {
               </span>
             </div>
             <RouteMap origin={from} dest={to} />
-          </section>
-          <section className={CARD} style={{ animationDelay: "100ms" }}>
-            <Conditions data={conditions} />
           </section>
           <section className={CARD} style={{ animationDelay: "180ms" }}>
             <Heatmap o={from} d={to} dir={direction} />
