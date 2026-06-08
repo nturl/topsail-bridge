@@ -1,12 +1,8 @@
 "use client";
 
-import { BridgeCam } from "./BridgeCam";
+import { Cameras } from "./Cameras";
 import { wmoLabel } from "@/lib/context";
 import type { ConditionsData } from "@/lib/types";
-
-// NCDOT's official viewer for the NC-210 mainland-approach camera. NCDOT gates
-// the live video to their own site, so we deep-link it rather than embed it.
-const MAINLAND_CAM = "https://www.drivenc.gov/map/Cctv/5400";
 
 export function Conditions({ data }: { data: ConditionsData | null }) {
   const w = data?.weather;
@@ -26,19 +22,7 @@ export function Conditions({ data }: { data: ConditionsData | null }) {
         </a>
       </div>
 
-      <BridgeCam />
-
-      <div className="flex items-center justify-between gap-2 text-xs">
-        <span className="text-slate-400">Live: Surf City roundabout (island side)</span>
-        <a
-          href={MAINLAND_CAM}
-          target="_blank"
-          rel="noreferrer"
-          className="shrink-0 text-sky-700 hover:underline dark:text-sky-400"
-        >
-          Mainland cam (NC-210) ↗
-        </a>
-      </div>
+      <Cameras />
 
       <div className="flex flex-wrap gap-2 text-xs">
         {w && (
