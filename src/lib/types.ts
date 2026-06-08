@@ -27,6 +27,7 @@ export type Incident = {
   roads: string[];
   direction: string | null;
   description: string;
+  severe?: boolean; // accident / full closure -> emphasized
 };
 
 export type Weather = { tempF: number; precipIn: number; code: number; windMph: number } | null;

@@ -4,9 +4,9 @@ import { BridgeCam } from "./BridgeCam";
 import { wmoLabel } from "@/lib/context";
 import type { ConditionsData } from "@/lib/types";
 
-function titleCase(s: string): string {
-  return s.replace(/-/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
-}
+// NCDOT's official viewer for the NC-210 mainland-approach camera. NCDOT gates
+// the live video to their own site, so we deep-link it rather than embed it.
+const MAINLAND_CAM = "https://www.drivenc.gov/map/Cctv/5400";
 
 export function Conditions({ data }: { data: ConditionsData | null }) {
   const w = data?.weather;
@@ -27,6 +27,18 @@ export function Conditions({ data }: { data: ConditionsData | null }) {
       </div>
 
       <BridgeCam />
+
+      <div className="flex items-center justify-between gap-2 text-xs">
+        <span className="text-slate-400">Live: Surf City roundabout (island side)</span>
+        <a
+          href={MAINLAND_CAM}
+          target="_blank"
+          rel="noreferrer"
+          className="shrink-0 text-sky-700 hover:underline dark:text-sky-400"
+        >
+          Mainland cam (NC-210) ↗
+        </a>
+      </div>
 
       <div className="flex flex-wrap gap-2 text-xs">
         {w && (
@@ -58,15 +70,33 @@ export function Conditions({ data }: { data: ConditionsData | null }) {
           incidents.map((inc) => (
             <div
               key={inc.id}
-              className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs dark:border-amber-500/20 dark:bg-amber-500/10"
+              className={
+                inc.severe
+                  ? "rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs dark:border-rose-500/20 dark:bg-rose-500/10"
+                  : "rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs dark:border-amber-500/20 dark:bg-amber-500/10"
+              }
             >
-              <p className="font-medium text-amber-900 dark:text-amber-300">
-                {titleCase(inc.type)}
+              <p
+                className={
+                  inc.severe
+                    ? "font-medium text-rose-900 dark:text-rose-300"
+                    : "font-medium text-amber-900 dark:text-amber-300"
+                }
+              >
+                {inc.type}
                 {inc.roads.length > 0 && ` · ${inc.roads.join(", ")}`}
                 {inc.direction && ` (${inc.direction})`}
               </p>
               {inc.description && (
-                <p className="mt-0.5 text-amber-800/80 dark:text-amber-200/70">{inc.description}</p>
+                <p
+                  className={
+                    inc.severe
+                      ? "mt-0.5 text-rose-800/80 dark:text-rose-200/70"
+                      : "mt-0.5 text-amber-800/80 dark:text-amber-200/70"
+                  }
+                >
+                  {inc.description}
+                </p>
               )}
             </div>
           ))

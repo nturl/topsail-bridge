@@ -29,7 +29,7 @@ export function buildCall(f: Forecast | null, c: ConditionsData | null): Call {
   const inc = c?.incidents ?? [];
   if (inc.length > 0) {
     const roads = [...new Set(inc.flatMap((i) => i.roads))].slice(0, 3).join(", ");
-    notes.push(`${inc.length} work zone${inc.length > 1 ? "s" : ""} on the route${roads ? ` (${roads})` : ""}.`);
+    notes.push(`${inc.length} alert${inc.length > 1 ? "s" : ""} on the route${roads ? ` (${roads})` : ""}.`);
   }
 
   if (f.worst?.minutes != null && f.worst.minutes - f.best.minutes >= 4) {
