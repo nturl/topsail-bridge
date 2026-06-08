@@ -4,6 +4,8 @@ import { useEffect, useRef, useState } from "react";
 
 const ISLAND_HLS = "https://www.surfchex.com/hls/sciga/index.m3u8";
 const MAINLAND_IMG = "https://www.drivenc.gov/map/Cctv/5400";
+// NCDOT serves this exact PNG (constant size) when a camera is temporarily down.
+const PLACEHOLDER_BYTES = 15136;
 
 // Island roundabout: live HLS video. Prefer hls.js wherever it's supported
 // (Chrome/Edge/Firefox/Dia); only fall back to native HLS on Safari/iOS, since
@@ -97,36 +99,60 @@ function IslandVideo() {
 // Mainland NC-210: NCDOT gates the video, but serves a public snapshot PNG that
 // updates ~every minute. Refresh it on an interval with a cache-bust.
 function MainlandSnapshot() {
-  const [src, setSrc] = useState(`${MAINLAND_IMG}?t=0`);
-  const [failed, setFailed] = useState(false);
+  // "loading" | "offline" (cam down / NCDOT placeholder) | { url } (live frame)
+  const [state, setState] = useState<"loading" | "offline" | { url: string }>("loading");
 
   useEffect(() => {
-    const update = () => setSrc(`${MAINLAND_IMG}?t=${Date.now()}`);
-    update();
-    const id = setInterval(update, 30_000);
-    return () => clearInterval(id);
+    let alive = true;
+    let objUrl: string | null = null;
+    const load = async () => {
+      try {
+        const r = await fetch(`${MAINLAND_IMG}?t=${Date.now()}`, { cache: "no-store" });
+        if (!r.ok) {
+          if (alive) setState("offline");
+          return;
+        }
+        const blob = await r.blob();
+        if (!alive) return;
+        if (blob.size === PLACEHOLDER_BYTES) {
+          setState("offline"); // NCDOT's "no live camera feed" graphic
+          return;
+        }
+        if (objUrl) URL.revokeObjectURL(objUrl);
+        objUrl = URL.createObjectURL(blob);
+        setState({ url: objUrl });
+      } catch {
+        if (alive) setState("offline");
+      }
+    };
+    load();
+    const id = setInterval(load, 30_000);
+    return () => {
+      alive = false;
+      clearInterval(id);
+      if (objUrl) URL.revokeObjectURL(objUrl);
+    };
   }, []);
 
-  if (failed) {
+  if (state === "loading") {
+    return <div className="aspect-video w-full animate-pulse rounded-2xl bg-slate-800" />;
+  }
+  if (state === "offline") {
     return (
-      <a
-        href={MAINLAND_IMG}
-        target="_blank"
-        rel="noreferrer"
-        className="flex aspect-video w-full items-center justify-center rounded-2xl bg-slate-900 text-sm text-sky-300"
-      >
-        Open mainland cam ↗
-      </a>
+      <div className="flex aspect-video w-full flex-col items-center justify-center gap-1 rounded-2xl bg-slate-900 text-center text-xs text-slate-400">
+        <span>Mainland cam is offline right now.</span>
+        <a href={MAINLAND_IMG} target="_blank" rel="noreferrer" className="text-sky-300 hover:underline">
+          Check on DriveNC ↗
+        </a>
+      </div>
     );
   }
-
   return (
     <div className="relative overflow-hidden rounded-2xl bg-slate-900">
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
-        src={src}
+        src={state.url}
         alt="NC-210 mainland approach to the Surf City bridge"
-        onError={() => setFailed(true)}
         className="aspect-video w-full object-cover"
       />
       <span className="absolute left-2 top-2 rounded-full bg-black/55 px-2 py-0.5 text-[10px] font-medium text-white backdrop-blur">

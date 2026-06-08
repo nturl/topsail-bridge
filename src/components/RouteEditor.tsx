@@ -23,17 +23,17 @@ function PlaceField({
 }: {
   id: string;
   label: string;
-  initial: Place;
+  initial: Place | null;
   onSelect: (p: Place) => void;
   withLocation?: boolean;
 }) {
-  const [q, setQ] = useState(initial.address);
+  const [q, setQ] = useState(initial?.address ?? "");
   const [sugg, setSugg] = useState<Place[]>([]);
   const [open, setOpen] = useState(false);
   const [locating, setLocating] = useState(false);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  useEffect(() => setQ(initial.address), [initial.address]);
+  useEffect(() => setQ(initial?.address ?? ""), [initial?.address]);
 
   function onChange(v: string) {
     setQ(v);
@@ -117,13 +117,13 @@ export function RouteEditor({
   onClose,
 }: {
   open: boolean;
-  origin: Place;
-  dest: Place;
+  origin: Place | null;
+  dest: Place | null;
   onApply: (o: Place, d: Place) => void;
   onClose: () => void;
 }) {
-  const [o, setO] = useState<Place>(origin);
-  const [d, setD] = useState<Place>(dest);
+  const [o, setO] = useState<Place | null>(origin);
+  const [d, setD] = useState<Place | null>(dest);
   useEffect(() => {
     setO(origin);
     setD(dest);
@@ -154,10 +154,13 @@ export function RouteEditor({
         <div className="mt-5 flex gap-3">
           <button
             onClick={() => {
-              onApply(o, d);
-              onClose();
+              if (o && d) {
+                onApply(o, d);
+                onClose();
+              }
             }}
-            className="flex-1 rounded-xl bg-sky-600 py-2.5 text-sm font-medium text-white hover:bg-sky-700"
+            disabled={!o || !d}
+            className="flex-1 rounded-xl bg-sky-600 py-2.5 text-sm font-medium text-white hover:bg-sky-700 disabled:opacity-50"
           >
             Save route
           </button>
