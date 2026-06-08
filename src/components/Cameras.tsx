@@ -7,6 +7,61 @@ const MAINLAND_IMG = "https://www.drivenc.gov/map/Cctv/5400";
 // NCDOT serves this exact PNG (constant size) when a camera is temporarily down.
 const PLACEHOLDER_BYTES = 15136;
 
+// Topsail Island oval, recreated in the generic regional-sticker style (initials
+// + place name in an oval) rather than copying any specific brand's logo.
+function TopsailOval() {
+  return (
+    <div
+      className="flex flex-col items-center justify-center bg-white shadow"
+      style={{ width: 152, height: 94, borderRadius: "50%", border: "5px solid #0f172a" }}
+    >
+      <span style={{ fontSize: 42, fontWeight: 800, lineHeight: 1, letterSpacing: 1, color: "#0f172a" }}>TI</span>
+      <span className="font-serif italic" style={{ fontSize: 12, marginTop: 3, color: "#0f172a" }}>
+        Topsail Island, NC
+      </span>
+    </div>
+  );
+}
+
+// On-brand fallback shown whenever a feed isn't live: the Topsail Island oval on
+// the app's coastal gradient, instead of a black box or NCDOT's graphic.
+function CamPlaceholder({
+  title,
+  subtitle,
+  href,
+  hrefLabel,
+  pulse,
+}: {
+  title?: string;
+  subtitle?: string;
+  href?: string;
+  hrefLabel?: string;
+  pulse?: boolean;
+}) {
+  return (
+    <div
+      className="relative flex aspect-video w-full flex-col items-center justify-center gap-2 overflow-hidden rounded-2xl px-4 text-center"
+      style={{ background: "linear-gradient(160deg,#38bdf8,#0369a1)" }}
+    >
+      <div className={pulse ? "animate-pulse" : ""}>
+        <TopsailOval />
+      </div>
+      {title && <p className="mt-1 text-sm font-medium text-white">{title}</p>}
+      {subtitle && <p className="text-xs text-white/75">{subtitle}</p>}
+      {href && hrefLabel && (
+        <a
+          href={href}
+          target="_blank"
+          rel="noreferrer"
+          className="mt-0.5 text-xs text-white underline underline-offset-4 hover:opacity-80"
+        >
+          {hrefLabel} ↗
+        </a>
+      )}
+    </div>
+  );
+}
+
 // Island roundabout: live HLS video. Prefer hls.js wherever it's supported
 // (Chrome/Edge/Firefox/Dia); only fall back to native HLS on Safari/iOS, since
 // Chromium reports a misleading canPlayType("maybe") it can't actually decode.
@@ -54,14 +109,11 @@ function IslandVideo() {
 
   if (failed) {
     return (
-      <a
+      <CamPlaceholder
+        title="Camera is down right now"
         href="https://www.surfchex.com/cams/surf-city-bridge/"
-        target="_blank"
-        rel="noreferrer"
-        className="flex aspect-video w-full items-center justify-center rounded-2xl bg-slate-900 text-sm text-sky-300"
-      >
-        Open live cam ↗
-      </a>
+        hrefLabel="Open live cam"
+      />
     );
   }
 
@@ -135,16 +187,16 @@ function MainlandSnapshot() {
   }, []);
 
   if (state === "loading") {
-    return <div className="aspect-video w-full animate-pulse rounded-2xl bg-slate-800" />;
+    return <CamPlaceholder pulse subtitle="Loading mainland view…" />;
   }
   if (state === "offline") {
     return (
-      <div className="flex aspect-video w-full flex-col items-center justify-center gap-1 rounded-2xl bg-slate-900 text-center text-xs text-slate-400">
-        <span>Mainland cam is offline right now.</span>
-        <a href={MAINLAND_IMG} target="_blank" rel="noreferrer" className="text-sky-300 hover:underline">
-          Check on DriveNC ↗
-        </a>
-      </div>
+      <CamPlaceholder
+        title="Camera is down right now"
+        subtitle="NC-210 mainland feed"
+        href={MAINLAND_IMG}
+        hrefLabel="Check on DriveNC"
+      />
     );
   }
   return (
