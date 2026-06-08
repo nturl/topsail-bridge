@@ -2,7 +2,7 @@ import { ImageResponse } from "next/og";
 
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
-export const alt = "Bridge Watch — when to leave Topsail Island";
+export const alt = "Topsail Traffic — when to leave Topsail Island";
 
 export default function OpengraphImage() {
   return new ImageResponse(
@@ -14,20 +14,30 @@ export default function OpengraphImage() {
           display: "flex",
           flexDirection: "column",
           justifyContent: "center",
-          padding: 90,
+          padding: 96,
           background: "linear-gradient(160deg,#38bdf8,#0369a1)",
           color: "white",
         }}
       >
-        <svg width="150" height="150" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="1.5" strokeLinecap="round">
-          <path d="M2 17 Q12 5 22 17" />
-          <line x1="2" y1="17" x2="22" y2="17" />
-          <line x1="7" y1="12.5" x2="7" y2="17" />
-          <line x1="12" y1="10.5" x2="12" y2="17" />
-          <line x1="17" y1="12.5" x2="17" y2="17" />
-        </svg>
-        <div style={{ fontSize: 88, fontWeight: 700, marginTop: 28, letterSpacing: -1 }}>Topsail Traffic</div>
-        <div style={{ fontSize: 40, opacity: 0.92, marginTop: 6 }}>
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            width: 236,
+            height: 152,
+            background: "#ffffff",
+            borderRadius: "50%",
+            border: "9px solid #0f172a",
+          }}
+        >
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
+            <span style={{ fontSize: 80, fontWeight: 800, color: "#0f172a", lineHeight: 1 }}>TI</span>
+            <span style={{ fontSize: 19, color: "#0f172a", marginTop: 5 }}>Topsail Island, NC</span>
+          </div>
+        </div>
+        <div style={{ fontSize: 90, fontWeight: 700, marginTop: 40, letterSpacing: -1 }}>Topsail Traffic</div>
+        <div style={{ fontSize: 40, opacity: 0.92, marginTop: 8 }}>
           When to leave (and return to) Topsail Island
         </div>
       </div>

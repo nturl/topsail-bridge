@@ -31,6 +31,7 @@ function PlaceField({
   const [sugg, setSugg] = useState<Place[]>([]);
   const [open, setOpen] = useState(false);
   const [locating, setLocating] = useState(false);
+  const [locError, setLocError] = useState<string | null>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => setQ(initial?.address ?? ""), [initial?.address]);
@@ -48,20 +49,38 @@ function PlaceField({
     onSelect(p);
   }
   function useLocation() {
-    if (!navigator.geolocation) return;
+    setLocError(null);
+    if (!navigator.geolocation) {
+      setLocError("Location isn't available on this device.");
+      return;
+    }
     setLocating(true);
     navigator.geolocation.getCurrentPosition(
       async (pos) => {
+        const { longitude: lng, latitude: lat } = pos.coords;
+        // Always usable even if reverse-geocoding fails (matters in iOS PWAs).
+        let place: Place = { label: "My location", address: "My location", lng, lat };
         try {
-          const r = await fetch(`/api/geocode?lng=${pos.coords.longitude}&lat=${pos.coords.latitude}`);
-          const p = (await r.json()).result as Place | null;
-          if (p) pick(p);
-        } finally {
-          setLocating(false);
+          const r = await fetch(`/api/geocode?lng=${lng}&lat=${lat}`);
+          if (r.ok) {
+            const p = (await r.json()).result as Place | null;
+            if (p) place = p;
+          }
+        } catch {
+          /* keep the raw-coordinate fallback */
         }
+        pick(place);
+        setLocating(false);
       },
-      () => setLocating(false),
-      { enableHighAccuracy: true, timeout: 8000 },
+      (err) => {
+        setLocating(false);
+        setLocError(
+          err.code === err.PERMISSION_DENIED
+            ? "Allow location access for Topsail Traffic in your device settings."
+            : "Couldn't get your location. Try again, or type your address.",
+        );
+      },
+      { enableHighAccuracy: false, timeout: 15000, maximumAge: 60000 },
     );
   }
 
@@ -80,14 +99,17 @@ function PlaceField({
         className="mt-1 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm outline-none focus:border-sky-400 dark:border-slate-700 dark:bg-slate-800"
       />
       {withLocation && (
-        <button
-          type="button"
-          onClick={useLocation}
-          disabled={locating}
-          className="mt-1.5 text-xs text-sky-700 hover:underline disabled:opacity-50 dark:text-sky-400"
-        >
-          {locating ? "Locating…" : "Use my current location"}
-        </button>
+        <div className="mt-1.5">
+          <button
+            type="button"
+            onClick={useLocation}
+            disabled={locating}
+            className="text-xs text-sky-700 hover:underline disabled:opacity-50 dark:text-sky-400"
+          >
+            {locating ? "Locating…" : "Use my current location"}
+          </button>
+          {locError && <p className="mt-1 text-xs text-rose-600 dark:text-rose-400">{locError}</p>}
+        </div>
       )}
       {open && sugg.length > 0 && (
         <ul className="absolute z-20 mt-1 w-full overflow-hidden rounded-xl border border-slate-200 bg-white shadow-lg dark:border-slate-700 dark:bg-slate-800">
