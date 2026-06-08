@@ -26,7 +26,7 @@ export default function OpengraphImage() {
           <line x1="12" y1="10.5" x2="12" y2="17" />
           <line x1="17" y1="12.5" x2="17" y2="17" />
         </svg>
-        <div style={{ fontSize: 88, fontWeight: 700, marginTop: 28, letterSpacing: -1 }}>Bridge Watch</div>
+        <div style={{ fontSize: 88, fontWeight: 700, marginTop: 28, letterSpacing: -1 }}>Topsail Traffic</div>
         <div style={{ fontSize: 40, opacity: 0.92, marginTop: 6 }}>
           When to leave (and return to) Topsail Island
         </div>

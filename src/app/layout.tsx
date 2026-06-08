@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono, Instrument_Serif } from "next/font/google";
 import "./globals.css";
 import { ServiceWorkerRegister } from "@/components/ServiceWorkerRegister";
+import { Analytics } from "@vercel/analytics/react";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -20,32 +21,32 @@ const instrumentSerif = Instrument_Serif({
   style: ["normal", "italic"],
 });
 
-const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "https://topsail-bridge.vercel.app";
+const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "https://topsailtraffic.com";
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
-  title: "Bridge Watch — Topsail Island traffic",
+  title: "Topsail Traffic",
   description:
-    "Know when to leave (and return to) Topsail Island. Live and predicted traffic across the Surf City bridge, a weekly rhythm, the live bridge cam, and NCDOT incidents.",
-  applicationName: "Bridge Watch",
+    "When to leave (and return to) Topsail Island. Live and predicted traffic across the Surf City bridge, your weekly rhythm, the live bridge cam, and NCDOT incidents.",
+  applicationName: "Topsail Traffic",
   appleWebApp: {
     capable: true,
-    title: "Bridge Watch",
+    title: "Topsail Traffic",
     statusBarStyle: "black-translucent",
   },
   formatDetection: {
     telephone: false,
   },
   openGraph: {
-    title: "Bridge Watch — Topsail Island traffic",
+    title: "Topsail Traffic",
     description: "When to leave (and return to) Topsail Island, across the Surf City bridge.",
     url: SITE_URL,
-    siteName: "Bridge Watch",
+    siteName: "Topsail Traffic",
     type: "website",
   },
   twitter: {
     card: "summary_large_image",
-    title: "Bridge Watch — Topsail Island traffic",
+    title: "Topsail Traffic",
     description: "When to leave (and return to) Topsail Island, across the Surf City bridge.",
   },
 };
@@ -81,6 +82,7 @@ export default function RootLayout({
       >
         {children}
         <ServiceWorkerRegister />
+        <Analytics />
       </body>
     </html>
   );

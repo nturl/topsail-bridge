@@ -108,7 +108,7 @@ export default function Page() {
     <main className="mx-auto w-full max-w-5xl px-5 py-8 md:py-12">
       <header className="mb-5 animate-fade-up">
         <div className="flex items-baseline justify-between">
-          <h1 className="font-serif text-4xl tracking-tight md:text-5xl">Bridge Watch</h1>
+          <h1 className="font-serif text-4xl tracking-tight md:text-5xl">Topsail Traffic</h1>
           <span className="text-xs text-slate-400">Surf City bridge</span>
         </div>
         <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
