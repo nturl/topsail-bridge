@@ -14,5 +14,19 @@ export default function manifest(): MetadataRoute.Manifest {
       { src: "/icons/manifest-512", sizes: "512x512", type: "image/png", purpose: "any" },
       { src: "/icons/manifest-512", sizes: "512x512", type: "image/png", purpose: "maskable" },
     ],
+    shortcuts: [
+      {
+        name: "Leaving the island",
+        short_name: "Leaving",
+        url: "/?dir=out",
+        icons: [{ src: "/icons/manifest-192", sizes: "192x192", type: "image/png" }],
+      },
+      {
+        name: "Returning to the island",
+        short_name: "Returning",
+        url: "/?dir=back",
+        icons: [{ src: "/icons/manifest-192", sizes: "192x192", type: "image/png" }],
+      },
+    ],
   };
 }

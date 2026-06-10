@@ -1,13 +1,14 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
-import type { ConditionsData, Forecast, Place } from "@/lib/types";
+import { useCallback, useEffect, useRef, useState } from "react";
+import type { ConditionsData, Forecast, HistoryData, Place } from "@/lib/types";
 import { Hero } from "@/components/Hero";
 import { ForecastChart } from "@/components/ForecastChart";
 import { Conditions } from "@/components/Conditions";
 import { Heatmap } from "@/components/Heatmap";
 import { RouteMap } from "@/components/RouteMap";
 import { RouteEditor } from "@/components/RouteEditor";
+import { TripPlanner } from "@/components/TripPlanner";
 
 const LS_KEY = "bw.route.v1";
 
@@ -34,17 +35,27 @@ export default function Page() {
   const [hydrated, setHydrated] = useState(false);
   const [forecast, setForecast] = useState<Forecast | null>(null);
   const [conditions, setConditions] = useState<ConditionsData | null>(null);
+  const [history, setHistory] = useState<HistoryData | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [updatedAt, setUpdatedAt] = useState<Date | null>(null);
+  const [offline, setOffline] = useState(false);
+  const lastFetchRef = useRef(0);
 
   useEffect(() => {
     setRoute(loadRoute());
+    // PWA shortcuts deep-link straight into a direction (/?dir=back).
+    try {
+      if (new URLSearchParams(window.location.search).get("dir") === "back") setDirection("back");
+    } catch {
+      /* ignore */
+    }
     setHydrated(true);
   }, []);
 
-  // Bridge conditions (cam, weather, incidents) are route-independent: always load.
+  // Bridge conditions (cam, weather, tides, incidents) are route-independent: always load.
   const fetchConditions = useCallback(async () => {
+    lastFetchRef.current = Date.now();
     try {
       const r = await fetch("/api/conditions", { cache: "no-store" });
       if (r.ok) setConditions((await r.json()) as ConditionsData);
@@ -64,6 +75,7 @@ export default function Page() {
   const fetchForecast = useCallback(async (r: Route, dir: Direction) => {
     const from = dir === "out" ? r.origin : r.dest;
     const to = dir === "out" ? r.dest : r.origin;
+    lastFetchRef.current = Date.now();
     setLoading(true);
     setError(null);
     try {
@@ -89,6 +101,55 @@ export default function Page() {
     const id = setInterval(() => fetchForecast(route, direction), 120_000);
     return () => clearInterval(id);
   }, [route, direction, hydrated, fetchForecast]);
+
+  // Weekly history powers both the trip planner and the heatmap; fetch it once
+  // per route + direction up here and share it.
+  useEffect(() => {
+    if (!hydrated || !route) {
+      setHistory(null);
+      return;
+    }
+    const from = direction === "out" ? route.origin : route.dest;
+    const to = direction === "out" ? route.dest : route.origin;
+    let cancelled = false;
+    setHistory(null);
+    fetch(`/api/history?o=${from.lng},${from.lat}&d=${to.lng},${to.lat}`)
+      .then((r) => r.json())
+      .then((j) => {
+        if (!cancelled) setHistory(j as HistoryData);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [hydrated, route, direction]);
+
+  // PWAs reopen from the background a lot; refetch when the app comes back
+  // (stale after 2 min) or when the connection returns.
+  useEffect(() => {
+    const refresh = () => {
+      if (Date.now() - lastFetchRef.current < 120_000) return;
+      fetchConditions();
+      if (route) fetchForecast(route, direction);
+    };
+    const onVisible = () => {
+      if (document.visibilityState === "visible") refresh();
+    };
+    const onOnline = () => {
+      setOffline(false);
+      refresh();
+    };
+    const onOffline = () => setOffline(true);
+    setOffline(!navigator.onLine);
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("online", onOnline);
+    window.addEventListener("offline", onOffline);
+    return () => {
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("online", onOnline);
+      window.removeEventListener("offline", onOffline);
+    };
+  }, [route, direction, fetchForecast, fetchConditions]);
 
   function applyRoute(origin: Place, dest: Place) {
     const r = { origin, dest };
@@ -196,8 +257,11 @@ export default function Page() {
               </div>
               <RouteMap origin={from} dest={to} />
             </section>
+            <section className={CARD} style={{ animationDelay: "140ms" }}>
+              <TripPlanner data={history} dir={direction} />
+            </section>
             <section className={CARD} style={{ animationDelay: "180ms" }}>
-              <Heatmap o={from} d={to} dir={direction} />
+              <Heatmap data={history} dir={direction} />
             </section>
           </div>
         </div>
@@ -224,7 +288,10 @@ export default function Page() {
       <section className="mt-6 flex items-center justify-between text-xs text-slate-400">
         {route ? (
           <button
-            onClick={() => fetchForecast(route, direction)}
+            onClick={() => {
+              fetchForecast(route, direction);
+              fetchConditions();
+            }}
             className="hover:text-slate-600 dark:hover:text-slate-200"
           >
             ↻ Refresh
@@ -239,8 +306,17 @@ export default function Page() {
         </span>
       </section>
       <p className="mt-2 text-center text-[11px] leading-relaxed text-slate-400">
-        Live + predicted traffic from Mapbox. Bridge cam by Surf City IGA, incidents from NCDOT DriveNC.
+        Live + predicted traffic from Mapbox. Bridge cam by Surf City IGA, incidents from NCDOT DriveNC, tides
+        from NOAA.
       </p>
+
+      {offline && (
+        <div className="pointer-events-none fixed inset-x-0 bottom-5 z-40 flex justify-center">
+          <span className="rounded-full bg-slate-900/90 px-3.5 py-1.5 text-xs font-medium text-white shadow-lg backdrop-blur dark:bg-white/90 dark:text-slate-900">
+            Offline · showing the last data
+          </span>
+        </div>
+      )}
 
       <RouteEditor
         open={editing}

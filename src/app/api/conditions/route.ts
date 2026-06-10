@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import type { Incident } from "@/lib/types";
+import type { Incident, Sun, TideEvent } from "@/lib/types";
 
 // Richer incidents come from the keyed DriveNC event feed; if no key (or it
 // fails) we fall back to the keyless WZDx work-zone feed.
@@ -111,32 +111,93 @@ async function wzdxIncidents(): Promise<Incident[]> {
   }
 }
 
-async function getWeather(): Promise<Weather> {
+// "h:mm" 24h -> compact chip clock ("3:01p").
+function chipClock(hhmm: string): string {
+  const [h, m] = hhmm.split(":").map(Number);
+  const hr = h % 12 === 0 ? 12 : h % 12;
+  return `${hr}:${String(m).padStart(2, "0")}${h < 12 ? "a" : "p"}`;
+}
+
+// Now as "YYYY-MM-DD HH:mm" in Eastern, lexicographically comparable with the
+// local timestamps NOAA returns.
+function nyStamp(): string {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/New_York",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  })
+    .format(new Date())
+    .replace(", ", " ");
+}
+
+// NOAA Ocean City Beach fishing pier (8657419), ~3 mi from the bridge: the
+// next high and low tide. Predictions are static, so a long revalidate is fine.
+const TIDE_STATION = "8657419";
+
+async function getTides(): Promise<TideEvent[] | null> {
   try {
-    const url =
-      "https://api.open-meteo.com/v1/forecast?latitude=34.43&longitude=-77.55&current=temperature_2m,precipitation,weather_code,wind_speed_10m&temperature_unit=fahrenheit&wind_speed_unit=mph&precipitation_unit=inch";
-    const r = await fetch(url, { next: { revalidate: 600 } });
+    const today = nyStamp().slice(0, 10).replaceAll("-", "");
+    const url = `https://api.tidesandcurrents.noaa.gov/api/prod/datagetter?product=predictions&interval=hilo&datum=MLLW&station=${TIDE_STATION}&time_zone=lst_ldt&units=english&begin_date=${today}&range=36&format=json`;
+    const r = await fetch(url, { next: { revalidate: 3600 } });
     if (!r.ok) return null;
-    const c = ((await r.json()) as { current?: Record<string, number> }).current;
-    if (!c) return null;
-    return {
-      tempF: Math.round(c.temperature_2m),
-      precipIn: c.precipitation,
-      code: c.weather_code,
-      windMph: Math.round(c.wind_speed_10m),
-    };
+    const rows = ((await r.json()) as { predictions?: Array<{ t: string; type: string }> }).predictions ?? [];
+    const now = nyStamp();
+    const events: TideEvent[] = [];
+    const seen = new Set<string>();
+    for (const p of rows) {
+      if (p.t <= now) continue;
+      const type = p.type === "H" ? "high" : "low";
+      if (seen.has(type)) continue;
+      seen.add(type);
+      events.push({ type, clock: chipClock(p.t.slice(11)) });
+      if (events.length === 2) break;
+    }
+    return events.length ? events : null;
   } catch {
     return null;
   }
 }
 
+async function getWeatherSun(): Promise<{ weather: Weather; sun: Sun | null }> {
+  try {
+    const url =
+      "https://api.open-meteo.com/v1/forecast?latitude=34.43&longitude=-77.55&current=temperature_2m,precipitation,weather_code,wind_speed_10m&daily=sunrise,sunset&forecast_days=1&timezone=America%2FNew_York&temperature_unit=fahrenheit&wind_speed_unit=mph&precipitation_unit=inch";
+    const r = await fetch(url, { next: { revalidate: 600 } });
+    if (!r.ok) return { weather: null, sun: null };
+    const j = (await r.json()) as {
+      current?: Record<string, number>;
+      daily?: { sunrise?: string[]; sunset?: string[] };
+    };
+    const c = j.current;
+    const weather: Weather = c
+      ? {
+          tempF: Math.round(c.temperature_2m),
+          precipIn: c.precipitation,
+          code: c.weather_code,
+          windMph: Math.round(c.wind_speed_10m),
+        }
+      : null;
+    const sunrise = j.daily?.sunrise?.[0];
+    const sunset = j.daily?.sunset?.[0];
+    const sun =
+      sunrise && sunset ? { sunriseClock: chipClock(sunrise.slice(11)), sunsetClock: chipClock(sunset.slice(11)) } : null;
+    return { weather, sun };
+  } catch {
+    return { weather: null, sun: null };
+  }
+}
+
 export async function GET() {
-  const [dnc, weather] = await Promise.all([driveNCIncidents(), getWeather()]);
+  const [dnc, ws, tides] = await Promise.all([driveNCIncidents(), getWeatherSun(), getTides()]);
   const all = dnc ?? (await wzdxIncidents());
   const incidents = all.slice(0, 8);
   const omitted = Math.max(0, all.length - incidents.length);
   return NextResponse.json(
-    { incidents, omitted, weather, source: dnc ? "drivenc" : "wzdx" },
+    { incidents, omitted, weather: ws.weather, sun: ws.sun, tides, source: dnc ? "drivenc" : "wzdx" },
     { headers: { "Cache-Control": "public, s-maxage=300, stale-while-revalidate=900" } },
   );
 }

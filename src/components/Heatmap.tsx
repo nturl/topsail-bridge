@@ -1,29 +1,10 @@
 "use client";
 
 import { Fragment, useEffect, useMemo, useState } from "react";
-import type { LngLat } from "@/lib/types";
-
-type Cell = {
-  dow: number;
-  hod: number;
-  minutes: number;
-  source: "actual" | "typical";
-  samples: number;
-};
-type History = { hours: number[]; cells: Cell[]; totalActual: number; canonical: boolean };
+import type { HistoryCell, HistoryData } from "@/lib/types";
+import { heatColor, heatScale, hourLabel } from "@/lib/heat";
 
 const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-
-function heatColor(t: number): string {
-  const hue = 145 - 145 * Math.max(0, Math.min(1, t)); // green -> red
-  return `hsl(${hue}, 68%, 46%)`;
-}
-
-function hourLabel(h: number): string {
-  const ap = h < 12 ? "a" : "p";
-  const hr = h % 12 === 0 ? 12 : h % 12;
-  return `${hr}${ap}`;
-}
 
 function nowCell(): { dow: number; hod: number } {
   const p = new Intl.DateTimeFormat("en-US", {
@@ -37,41 +18,20 @@ function nowCell(): { dow: number; hod: number } {
   return { dow: DAYS.indexOf(wd), hod };
 }
 
-export function Heatmap({ o, d, dir }: { o: LngLat; d: LngLat; dir: "out" | "back" }) {
-  const [data, setData] = useState<History | null>(null);
-  const [sel, setSel] = useState<Cell | null>(null);
+export function Heatmap({ data, dir }: { data: HistoryData | null; dir: "out" | "back" }) {
+  const [sel, setSel] = useState<HistoryCell | null>(null);
   const now = useMemo(nowCell, []);
-  const key = `${o.lng},${o.lat};${d.lng},${d.lat}`;
 
-  useEffect(() => {
-    setData(null);
-    setSel(null);
-    let cancelled = false;
-    fetch(`/api/history?o=${o.lng},${o.lat}&d=${d.lng},${d.lat}`)
-      .then((r) => r.json())
-      .then((j) => {
-        if (!cancelled) setData(j);
-      })
-      .catch(() => {});
-    return () => {
-      cancelled = true;
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [key]);
+  useEffect(() => setSel(null), [data]);
 
-  // Anchor the color scale to the 90th percentile so a single slow cell doesn't
-  // flatten everything else to green.
-  const { byKey, lo, hi } = useMemo(() => {
-    const m = new Map<string, Cell>();
+  const { byKey, norm } = useMemo(() => {
+    const m = new Map<string, HistoryCell>();
     const vals: number[] = [];
     for (const c of data?.cells ?? []) {
       m.set(`${c.dow}:${c.hod}`, c);
       vals.push(c.minutes);
     }
-    vals.sort((a, b) => a - b);
-    const low = vals[0] ?? 0;
-    const high = Math.max(vals[Math.floor(vals.length * 0.9)] ?? low, low + 1);
-    return { byKey: m, lo: low, hi: high };
+    return { byKey: m, norm: heatScale(vals).norm };
   }, [data]);
 
   const subtext = dir === "out" ? "leaving the island" : "coming back";
@@ -91,7 +51,6 @@ export function Heatmap({ o, d, dir }: { o: LngLat; d: LngLat; dir: "out" | "bac
   }
   if (!data.cells.length) return null;
 
-  const norm = (v: number) => Math.max(0, Math.min(1, (v - lo) / (hi - lo)));
   const todayCells = data.cells.filter((c) => c.dow === now.dow);
   const bestToday = todayCells.length ? todayCells.reduce((a, b) => (b.minutes < a.minutes ? b : a)) : null;
   const busiest = data.cells.reduce((a, b) => (b.minutes > a.minutes ? b : a));

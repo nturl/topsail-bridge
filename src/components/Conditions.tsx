@@ -4,6 +4,15 @@ import { Cameras } from "./Cameras";
 import { wmoLabel } from "@/lib/context";
 import type { ConditionsData } from "@/lib/types";
 
+// Mornings care about sunrise, the rest of the day about sunset.
+function etHour(): number {
+  return Number(
+    new Intl.DateTimeFormat("en-US", { timeZone: "America/New_York", hour: "2-digit", hourCycle: "h23" }).format(
+      new Date(),
+    ),
+  );
+}
+
 export function Conditions({ data }: { data: ConditionsData | null }) {
   const w = data?.weather;
   const incidents = data?.incidents ?? [];
@@ -38,6 +47,19 @@ export function Conditions({ data }: { data: ConditionsData | null }) {
         {w && w.windMph >= 20 && (
           <span className="rounded-full bg-amber-100 px-2.5 py-1 text-amber-800 dark:bg-amber-500/15 dark:text-amber-300">
             Wind {w.windMph} mph
+          </span>
+        )}
+        {(data?.tides ?? []).map((t) => (
+          <span
+            key={t.type}
+            className="rounded-full bg-slate-100 px-2.5 py-1 text-slate-700 dark:bg-slate-800 dark:text-slate-300"
+          >
+            {t.type === "high" ? "High tide" : "Low tide"} {t.clock}
+          </span>
+        ))}
+        {data?.sun && (
+          <span className="rounded-full bg-slate-100 px-2.5 py-1 text-slate-700 dark:bg-slate-800 dark:text-slate-300">
+            {etHour() < 11 ? `Sunrise ${data.sun.sunriseClock}` : `Sunset ${data.sun.sunsetClock}`}
           </span>
         )}
       </div>

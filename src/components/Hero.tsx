@@ -1,7 +1,39 @@
 "use client";
 
+import { useEffect, useRef, useState } from "react";
 import type { ConditionsData, Forecast } from "@/lib/types";
 import { buildCall, type Tone } from "@/lib/call";
+
+// Ease the big number between refreshes instead of snapping. First paint and
+// reduced-motion render the value directly.
+function useCountUp(target: number | null): number | null {
+  const [shown, setShown] = useState(target);
+  const prev = useRef(target);
+  useEffect(() => {
+    const from = prev.current;
+    prev.current = target;
+    if (
+      target == null ||
+      from == null ||
+      from === target ||
+      window.matchMedia?.("(prefers-reduced-motion: reduce)").matches
+    ) {
+      setShown(target);
+      return;
+    }
+    const start = performance.now();
+    let raf = 0;
+    const tick = (t: number) => {
+      const k = Math.min(1, (t - start) / 500);
+      const eased = 1 - Math.pow(1 - k, 3);
+      setShown(Math.round(from + (target - from) * eased));
+      if (k < 1) raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [target]);
+  return shown;
+}
 
 const PILL: Record<Tone, string> = {
   emerald: "bg-emerald-100 text-emerald-800 dark:bg-emerald-500/15 dark:text-emerald-300",
@@ -21,6 +53,7 @@ export function Hero({
 }) {
   const call = buildCall(forecast, conditions);
   const now = forecast?.now ?? null;
+  const shownNow = useCountUp(now);
   const best = forecast?.best?.minutes ?? null;
   const worst = forecast?.worst?.minutes ?? null;
   const hasGauge = now != null && best != null && worst != null && worst > best;
@@ -33,7 +66,7 @@ export function Hero({
           <p className="text-xs uppercase tracking-wide text-slate-400">Leave now</p>
           <div className="mt-1 flex items-end gap-2">
             <span className="font-serif text-6xl leading-none tabular-nums">
-              {now ?? (loading ? "··" : "—")}
+              {shownNow ?? (loading ? "··" : "—")}
             </span>
             <span className="pb-1 text-lg text-slate-400">min</span>
           </div>

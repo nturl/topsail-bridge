@@ -32,4 +32,30 @@ export type Incident = {
 
 export type Weather = { tempF: number; precipIn: number; code: number; windMph: number } | null;
 
-export type ConditionsData = { incidents: Incident[]; omitted?: number; weather: Weather };
+export type TideEvent = { type: "high" | "low"; clock: string }; // next events, chronological
+
+export type Sun = { sunriseClock: string; sunsetClock: string };
+
+export type ConditionsData = {
+  incidents: Incident[];
+  omitted?: number;
+  weather: Weather;
+  tides?: TideEvent[] | null;
+  sun?: Sun | null;
+};
+
+// /api/history payload, shared by the heatmap and the trip planner.
+export type HistoryCell = {
+  dow: number;
+  hod: number;
+  minutes: number;
+  source: "actual" | "typical";
+  samples: number;
+};
+
+export type HistoryData = {
+  hours: number[];
+  cells: HistoryCell[];
+  totalActual: number;
+  canonical: boolean;
+};

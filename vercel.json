@@ -4,5 +4,13 @@
     "deploymentEnabled": {
       "main": false
     }
-  }
+  },
+  "redirects": [
+    {
+      "source": "/:path*",
+      "has": [{ "type": "host", "value": "topsail.live" }],
+      "destination": "https://topsailtraffic.com/:path*",
+      "permanent": true
+    }
+  ]
 }
