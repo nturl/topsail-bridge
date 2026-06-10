@@ -6,6 +6,17 @@
   --font-serif: var(--font-instrument);
 }
 
+/* Coastal horizon backdrop: a faint sky band at the top that settles into the
+   page color. Body keeps no bg- utility so these rules own the background. */
+body {
+  background: linear-gradient(180deg, #dbeefc 0%, #f0f9ff 320px) fixed #f0f9ff;
+}
+@media (prefers-color-scheme: dark) {
+  body {
+    background: radial-gradient(90% 480px at 50% 0%, rgba(12, 74, 110, 0.38), transparent) fixed #020617;
+  }
+}
+
 /* Editorial entrance motion. Pair with inline animation-delay for staggering. */
 @keyframes fade-up {
   from {
@@ -22,9 +33,39 @@
   animation: fade-up 0.55s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
+/* Route editor sheet entrance. */
+@keyframes sheet-up {
+  from {
+    opacity: 0;
+    transform: translateY(24px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-sheet-up {
+  animation: sheet-up 0.35s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+/* Tactile press for buttons and chips. */
+.pressable {
+  transition: transform 0.15s ease;
+}
+.pressable:active {
+  transform: scale(0.97);
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .animate-fade-up {
+  .animate-fade-up,
+  .animate-sheet-up {
     animation: none;
+  }
+  .pressable,
+  .pressable:active {
+    transition: none;
+    transform: none;
   }
 }
 

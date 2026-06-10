@@ -40,7 +40,7 @@ export function Heatmap({ data, dir }: { data: HistoryData | null; dir: "out" | 
     return (
       <div>
         <div className="mb-3 flex items-center justify-between">
-          <h2 className="text-sm font-medium text-slate-600 dark:text-slate-300">Weekly rhythm</h2>
+          <h2 className="text-[11px] font-medium uppercase tracking-[0.08em] text-slate-400">Weekly rhythm</h2>
           <span className="text-xs text-slate-400">{subtext}</span>
         </div>
         <div className="flex h-44 animate-pulse items-center justify-center rounded-xl bg-slate-100 text-xs text-slate-400 dark:bg-slate-800">

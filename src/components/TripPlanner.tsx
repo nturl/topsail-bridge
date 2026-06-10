@@ -79,7 +79,7 @@ export function TripPlanner({ data, dir }: { data: HistoryData | null; dir: "out
     return (
       <div>
         <div className="mb-3 flex items-center justify-between">
-          <h2 className="text-sm font-medium text-slate-600 dark:text-slate-300">Plan a trip</h2>
+          <h2 className="text-[11px] font-medium uppercase tracking-[0.08em] text-slate-400">Plan a trip</h2>
           <span className="text-xs text-slate-400">{subtext}</span>
         </div>
         <div className="flex h-36 animate-pulse items-center justify-center rounded-xl bg-slate-100 text-xs text-slate-400 dark:bg-slate-800">
@@ -96,7 +96,7 @@ export function TripPlanner({ data, dir }: { data: HistoryData | null; dir: "out
   return (
     <div>
       <div className="mb-3 flex items-center justify-between">
-        <h2 className="text-sm font-medium text-slate-600 dark:text-slate-300">Plan a trip</h2>
+        <h2 className="text-[11px] font-medium uppercase tracking-[0.08em] text-slate-400">Plan a trip</h2>
         <span className="text-xs text-slate-400">{subtext}</span>
       </div>
 
@@ -109,9 +109,9 @@ export function TripPlanner({ data, dir }: { data: HistoryData | null; dir: "out
             role="tab"
             aria-selected={d.offset === offset}
             onClick={() => setOffset(d.offset)}
-            className={`flex min-w-11 shrink-0 flex-col items-center rounded-xl px-2 py-1.5 text-xs transition ${
+            className={`pressable flex min-w-11 shrink-0 flex-col items-center rounded-xl px-2 py-1.5 text-xs transition-colors ${
               d.offset === offset
-                ? "bg-sky-600 text-white"
+                ? "bg-sky-600 text-white shadow-sm"
                 : "bg-slate-100 text-slate-500 hover:text-slate-700 dark:bg-slate-800 dark:text-slate-400 dark:hover:text-slate-200"
             }`}
           >
@@ -130,13 +130,14 @@ export function TripPlanner({ data, dir }: { data: HistoryData | null; dir: "out
             disabled={!b.cell}
             onClick={() => setSelHour(b.h === selHour ? null : b.h)}
             aria-label={b.cell ? `${day.label} ${hourLabel(b.h)}: ${b.cell.minutes} minutes` : undefined}
-            className={`flex-1 rounded-t-[4px] transition ${
+            className={`flex-1 rounded-t-[4px] ${
               selHour === b.h ? "ring-2 ring-slate-900 dark:ring-white" : ""
             }`}
             style={{
               height: b.cell ? `${22 + b.t * 78}%` : "8%",
               background: b.cell ? heatColor(b.t) : "transparent",
               opacity: b.cell ? (b.past ? 0.25 : 1) : 0.1,
+              transition: "height 0.45s cubic-bezier(0.16,1,0.3,1), background 0.45s ease, opacity 0.3s ease",
             }}
           />
         ))}

@@ -216,7 +216,7 @@ function MainlandSnapshot() {
 
 export function Cameras() {
   const [view, setView] = useState<"island" | "mainland">("island");
-  const tab = "rounded-full px-3 py-1 transition";
+  const tab = "pressable rounded-full px-3 py-1 transition-colors";
   const active = "bg-white text-slate-900 shadow-sm dark:bg-slate-700 dark:text-white";
   const idle = "text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200";
 

@@ -24,7 +24,7 @@ export function ForecastChart({ forecast }: { forecast: Forecast }) {
   const best = forecast.best;
 
   return (
-    <div className="h-56 w-full">
+    <div className="h-56 w-full overflow-hidden">
       <ResponsiveContainer width="100%" height="100%">
         <AreaChart data={data} margin={{ top: 12, right: 14, left: -14, bottom: 0 }}>
           <defs>

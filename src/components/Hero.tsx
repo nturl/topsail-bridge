@@ -42,6 +42,14 @@ const PILL: Record<Tone, string> = {
   slate: "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300",
 };
 
+// Ambient wash behind the hero, keyed to the verdict tone.
+const GLOW: Record<Tone, string> = {
+  emerald: "rgba(16,185,129,0.16)",
+  amber: "rgba(245,158,11,0.16)",
+  rose: "rgba(244,63,94,0.16)",
+  slate: "rgba(148,163,184,0.10)",
+};
+
 export function Hero({
   forecast,
   conditions,
@@ -60,10 +68,15 @@ export function Hero({
   const pct = hasGauge ? Math.max(0, Math.min(1, (now - best) / (worst - best))) * 100 : 50;
 
   return (
-    <section className="animate-fade-up rounded-3xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
-      <div className="flex items-start justify-between">
+    <section className="relative animate-fade-up overflow-hidden rounded-3xl border border-slate-200/70 bg-white p-6 shadow-[0_1px_2px_rgba(2,6,23,0.04),0_16px_40px_-24px_rgba(2,6,23,0.25)] dark:border-white/10 dark:bg-slate-900 dark:shadow-[0_16px_40px_-24px_rgba(0,0,0,0.8)]">
+      <div
+        aria-hidden
+        className="pointer-events-none absolute -right-16 -top-20 h-56 w-72 rounded-full blur-2xl"
+        style={{ background: `radial-gradient(closest-side, ${GLOW[call.tone]}, transparent)`, transition: "background 0.8s ease" }}
+      />
+      <div className="relative flex items-start justify-between">
         <div>
-          <p className="text-xs uppercase tracking-wide text-slate-400">Leave now</p>
+          <p className="text-[11px] font-medium uppercase tracking-[0.08em] text-slate-400">Leave now</p>
           <div className="mt-1 flex items-end gap-2">
             <span className="font-serif text-6xl leading-none tabular-nums">
               {shownNow ?? (loading ? "··" : "—")}
@@ -74,7 +87,10 @@ export function Hero({
             <p className="mt-1 text-xs text-slate-400">{forecast.distanceMi.toFixed(1)} mi door to door</p>
           )}
         </div>
-        <span className={`rounded-full px-3 py-1 text-sm font-medium ${PILL[call.tone]}`}>{call.verdict}</span>
+        <span className={`flex items-center gap-1.5 rounded-full px-3 py-1 text-sm font-medium ${PILL[call.tone]}`}>
+          <span className="h-1.5 w-1.5 rounded-full bg-current opacity-70" />
+          {call.verdict}
+        </span>
       </div>
 
       {hasGauge && (
@@ -85,7 +101,7 @@ export function Hero({
           >
             <div
               className="absolute top-1/2 h-4 w-4 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white bg-slate-900 shadow dark:border-slate-900 dark:bg-white"
-              style={{ left: `${pct}%` }}
+              style={{ left: `clamp(8px, ${pct}%, calc(100% - 8px))`, transition: "left 0.7s cubic-bezier(0.16,1,0.3,1)" }}
             />
           </div>
           <div className="mt-1.5 flex justify-between text-[11px] text-slate-400">

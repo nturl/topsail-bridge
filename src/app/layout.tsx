@@ -85,7 +85,7 @@ export default function RootLayout({
       className={`${geistSans.variable} ${geistMono.variable} ${instrumentSerif.variable} h-full antialiased`}
     >
       <body
-        className="min-h-full bg-sky-50 text-slate-900 dark:bg-slate-950 dark:text-slate-100"
+        className="min-h-full text-slate-900 dark:text-slate-100"
         style={{
           paddingTop: "env(safe-area-inset-top, 0px)",
           paddingLeft: "env(safe-area-inset-left, 0px)",

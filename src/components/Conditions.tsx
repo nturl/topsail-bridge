@@ -20,7 +20,7 @@ export function Conditions({ data }: { data: ConditionsData | null }) {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <h2 className="text-sm font-medium text-slate-600 dark:text-slate-300">On the bridge now</h2>
+        <h2 className="text-[11px] font-medium uppercase tracking-[0.08em] text-slate-400">On the bridge now</h2>
         <a
           href="https://drivenc.gov/"
           target="_blank"
