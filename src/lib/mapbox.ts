@@ -1,6 +1,7 @@
 // Server-only Mapbox helpers. The token never reaches the client: geocoding,
 // route geometry, the static map image, and typical-week generation all run here.
 import type { LngLat, Place } from "./types";
+import { decodePolyline, encodePolyline } from "./polyline";
 
 const TOKEN = process.env.MAPBOX_TOKEN ?? process.env.NEXT_PUBLIC_MAPBOX_TOKEN ?? "";
 const TZ = "America/New_York";
@@ -64,16 +65,66 @@ export async function reverseGeocode(lng: number, lat: number): Promise<Place | 
   return f ? { label: f.text ?? "My location", address: f.place_name ?? "My location", lng, lat } : null;
 }
 
-export async function routePolyline(o: LngLat, d: LngLat): Promise<string | null> {
+// Route geometry plus per-segment congestion (driving-traffic only), so the
+// static map can show where the slowdown actually is. Short cache: it's live.
+export type CongestionRoute = { polyline: string; congestion: string[] };
+
+export async function routeWithCongestion(o: LngLat, d: LngLat): Promise<CongestionRoute | null> {
   if (!TOKEN) return null;
-  const url = `https://api.mapbox.com/directions/v5/mapbox/driving-traffic/${o.lng},${o.lat};${d.lng},${d.lat}?geometries=polyline&overview=full&access_token=${TOKEN}`;
-  const r = await fetch(url, { next: { revalidate: 3600 } });
+  const url = `https://api.mapbox.com/directions/v5/mapbox/driving-traffic/${o.lng},${o.lat};${d.lng},${d.lat}?geometries=polyline&overview=full&annotations=congestion&access_token=${TOKEN}`;
+  const r = await fetch(url, { next: { revalidate: 120 } });
   if (!r.ok) return null;
-  return ((await r.json()) as { routes?: Array<{ geometry?: string }> })?.routes?.[0]?.geometry ?? null;
+  const route = ((await r.json()) as {
+    routes?: Array<{ geometry?: string; legs?: Array<{ annotation?: { congestion?: string[] } }> }>;
+  })?.routes?.[0];
+  if (!route?.geometry) return null;
+  return { polyline: route.geometry, congestion: route.legs?.[0]?.annotation?.congestion ?? [] };
+}
+
+// Same palette family as the rest of the app: amber for slow, rose for stopped.
+const CONGESTION_COLOR: Record<string, string> = {
+  moderate: "f59e0b",
+  heavy: "ef4444",
+  severe: "dc2626",
+};
+
+function thin(pts: [number, number][], max = 60): [number, number][] {
+  if (pts.length <= max) return pts;
+  const step = (pts.length - 1) / (max - 1);
+  return Array.from({ length: max }, (_, i) => pts[Math.round(i * step)]);
+}
+
+// Merge consecutive congested segments into runs, each encoded as its own
+// sub-polyline drawn over the base route.
+export function congestionOverlays(poly: string, congestion: string[]): string[] {
+  const pts = decodePolyline(poly);
+  const runs: { color: string; pts: [number, number][] }[] = [];
+  let cur: { color: string; pts: [number, number][] } | null = null;
+  for (let i = 0; i < congestion.length && i + 1 < pts.length; i++) {
+    const color = CONGESTION_COLOR[congestion[i]];
+    if (!color) {
+      cur = null;
+      continue;
+    }
+    if (cur && cur.color === color) cur.pts.push(pts[i + 1]);
+    else {
+      cur = { color, pts: [pts[i], pts[i + 1]] };
+      runs.push(cur);
+    }
+  }
+  let overlays = runs
+    .filter((r) => r.pts.length >= 2)
+    .map((r) => `path-5+${r.color}-0.95(${encodeURIComponent(encodePolyline(thin(r.pts)))})`);
+  // Static map URLs have a length budget; under pressure keep only the
+  // heavy/severe runs (the ones worth seeing).
+  if (overlays.join(",").length > 5000) {
+    overlays = overlays.filter((o) => !o.includes("+f59e0b"));
+  }
+  return overlays;
 }
 
 const BRIDGE = { lng: -77.5463, lat: 34.4285 }; // Surf City high-rise bridge
-export function staticMapUrl(poly: string, o: LngLat, d: LngLat, dark: boolean): string {
+export function staticMapUrl(poly: string, overlays: string[], o: LngLat, d: LngLat, dark: boolean): string {
   const style = dark ? "dark-v11" : "light-v11";
   const path = `path-5+0ea5e9-0.9(${encodeURIComponent(poly)})`;
   const pins = [
@@ -81,7 +132,7 @@ export function staticMapUrl(poly: string, o: LngLat, d: LngLat, dark: boolean):
     `pin-l+ef4444(${BRIDGE.lng},${BRIDGE.lat})`,
     `pin-s+16a34a(${d.lng},${d.lat})`,
   ].join(",");
-  return `https://api.mapbox.com/styles/v1/mapbox/${style}/static/${path},${pins}/auto/640x320@2x?padding=44&access_token=${TOKEN}`;
+  return `https://api.mapbox.com/styles/v1/mapbox/${style}/static/${[path, ...overlays, pins].join(",")}/auto/640x320@2x?padding=44&access_token=${TOKEN}`;
 }
 
 // --- typical-week generation for any route (predicted rhythm) ---

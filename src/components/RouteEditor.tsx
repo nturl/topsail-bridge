@@ -14,40 +14,150 @@ async function search(q: string): Promise<Place[]> {
   }
 }
 
+// One-tap starting points for people who would rather not type.
+const QUICK_PICKS: Place[] = [
+  { label: "Surf City", address: "Surf City, NC", lng: -77.545585, lat: 34.427278 },
+  { label: "Topsail Beach", address: "Topsail Beach, NC", lng: -77.628865, lat: 34.366405 },
+  { label: "North Topsail Beach", address: "North Topsail Beach, NC", lng: -77.43024, lat: 34.488366 },
+  { label: "Harris Teeter", address: "203 Alston Blvd, Hampstead, NC", lng: -77.605212, lat: 34.450868 },
+  { label: "Food Lion", address: "13601 NC-50, Surf City, NC", lng: -77.5621, lat: 34.4466 },
+  { label: "Publix", address: "2765 NC-210, Hampstead, NC", lng: -77.564208, lat: 34.45184 },
+];
+
+const RECENTS_KEY = "bw.recents.v1";
+
+function loadRecents(): Place[] {
+  try {
+    return (JSON.parse(localStorage.getItem(RECENTS_KEY) ?? "[]") as Place[]).slice(0, 4);
+  } catch {
+    return [];
+  }
+}
+
+function saveRecent(p: Place) {
+  if (p.address === "My location") return; // raw GPS fallback; stale by tomorrow
+  try {
+    const rest = loadRecents().filter((x) => x.address !== p.address);
+    localStorage.setItem(RECENTS_KEY, JSON.stringify([p, ...rest].slice(0, 4)));
+  } catch {
+    /* ignore */
+  }
+}
+
+function Row({
+  place,
+  active,
+  onPick,
+}: {
+  place: Place;
+  active: boolean;
+  onPick: (p: Place) => void;
+}) {
+  return (
+    <li>
+      <button
+        type="button"
+        onMouseDown={(e) => {
+          e.preventDefault();
+          onPick(place);
+        }}
+        className={`block w-full px-3 py-2 text-left ${
+          active ? "bg-sky-50 dark:bg-slate-700" : "hover:bg-sky-50 dark:hover:bg-slate-700"
+        }`}
+      >
+        <span className="flex items-baseline justify-between gap-2">
+          <span className="truncate text-sm font-medium">{place.label}</span>
+          {place.distanceMi != null && <span className="shrink-0 text-xs text-slate-400">{place.distanceMi} mi</span>}
+        </span>
+        <span className="block truncate text-xs text-slate-400">{place.address}</span>
+      </button>
+    </li>
+  );
+}
+
+function SectionLabel({ children }: { children: React.ReactNode }) {
+  return (
+    <li className="px-3 pb-1 pt-2 text-[10px] font-medium uppercase tracking-[0.08em] text-slate-400">{children}</li>
+  );
+}
+
 function PlaceField({
   id,
   label,
   initial,
+  recents,
   onSelect,
   withLocation,
 }: {
   id: string;
   label: string;
   initial: Place | null;
+  recents: Place[];
   onSelect: (p: Place) => void;
   withLocation?: boolean;
 }) {
   const [q, setQ] = useState(initial?.address ?? "");
   const [sugg, setSugg] = useState<Place[]>([]);
   const [open, setOpen] = useState(false);
+  const [searching, setSearching] = useState(false);
+  const [dirty, setDirty] = useState(false); // has the user typed since focusing
+  const [active, setActive] = useState(-1);
   const [locating, setLocating] = useState(false);
   const [locError, setLocError] = useState<string | null>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => setQ(initial?.address ?? ""), [initial?.address]);
 
+  const picks = QUICK_PICKS.filter((p) => !recents.some((r) => r.address === p.address));
+  const showSections = !dirty || !q.trim();
+  const options = showSections ? [...recents, ...picks] : sugg;
+
   function onChange(v: string) {
     setQ(v);
+    setDirty(true);
+    setActive(-1);
     setOpen(true);
     if (timer.current) clearTimeout(timer.current);
-    timer.current = setTimeout(async () => setSugg(await search(v)), 250);
+    if (!v.trim()) {
+      setSugg([]);
+      setSearching(false);
+      return;
+    }
+    setSearching(true);
+    timer.current = setTimeout(async () => {
+      setSugg(await search(v));
+      setSearching(false);
+    }, 250);
   }
+
   function pick(p: Place) {
     setQ(p.address);
     setSugg([]);
     setOpen(false);
+    setDirty(false);
+    setActive(-1);
     onSelect(p);
   }
+
+  function onKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
+    if (e.key === "Escape") {
+      setOpen(false);
+      return;
+    }
+    if (!options.length) return;
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      setOpen(true);
+      setActive((a) => Math.min(a + 1, options.length - 1));
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      setActive((a) => Math.max(a - 1, 0));
+    } else if (e.key === "Enter" && active >= 0) {
+      e.preventDefault();
+      pick(options[active]);
+    }
+  }
+
   function useLocation() {
     setLocError(null);
     if (!navigator.geolocation) {
@@ -84,6 +194,9 @@ function PlaceField({
     );
   }
 
+  const showDropdown =
+    open && (showSections ? options.length > 0 : searching || sugg.length > 0 || q.trim().length > 0);
+
   return (
     <div className="relative">
       <label htmlFor={id} className="text-xs font-medium text-slate-500 dark:text-slate-400">
@@ -93,10 +206,13 @@ function PlaceField({
         id={id}
         value={q}
         onChange={(e) => onChange(e.target.value)}
+        onKeyDown={onKeyDown}
         onFocus={(e) => {
+          setDirty(false);
           setOpen(true);
           e.target.select(); // typing a new place replaces the old one
         }}
+        onBlur={() => setTimeout(() => setOpen(false), 120)}
         autoComplete="off"
         placeholder="Search an address or place"
         className="mt-1 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm outline-none focus:border-sky-400 dark:border-slate-700 dark:bg-slate-800"
@@ -114,25 +230,28 @@ function PlaceField({
           {locError && <p className="mt-1 text-xs text-rose-600 dark:text-rose-400">{locError}</p>}
         </div>
       )}
-      {open && sugg.length > 0 && (
-        <ul className="absolute z-20 mt-1 w-full overflow-hidden rounded-xl border border-slate-200 bg-white shadow-lg dark:border-slate-700 dark:bg-slate-800">
-          {sugg.map((s, i) => (
-            <li key={i}>
-              <button
-                type="button"
-                onClick={() => pick(s)}
-                className="block w-full px-3 py-2 text-left hover:bg-sky-50 dark:hover:bg-slate-700"
-              >
-                <span className="flex items-baseline justify-between gap-2">
-                  <span className="truncate text-sm font-medium">{s.label}</span>
-                  {s.distanceMi != null && (
-                    <span className="shrink-0 text-xs text-slate-400">{s.distanceMi} mi</span>
-                  )}
-                </span>
-                <span className="block truncate text-xs text-slate-400">{s.address}</span>
-              </button>
+      {showDropdown && (
+        <ul className="absolute z-20 mt-1 max-h-72 w-full overflow-auto rounded-xl border border-slate-200 bg-white pb-1 shadow-lg dark:border-slate-700 dark:bg-slate-800">
+          {showSections ? (
+            <>
+              {recents.length > 0 && <SectionLabel>Recent</SectionLabel>}
+              {recents.map((p, i) => (
+                <Row key={`r-${p.address}`} place={p} active={i === active} onPick={pick} />
+              ))}
+              {picks.length > 0 && <SectionLabel>Nearby picks</SectionLabel>}
+              {picks.map((p, i) => (
+                <Row key={`p-${p.address}`} place={p} active={recents.length + i === active} onPick={pick} />
+              ))}
+            </>
+          ) : searching ? (
+            <li className="px-3 py-2.5 text-sm text-slate-400">Searching nearby…</li>
+          ) : sugg.length > 0 ? (
+            sugg.map((p, i) => <Row key={`${p.address}-${i}`} place={p} active={i === active} onPick={pick} />)
+          ) : (
+            <li className="px-3 py-2.5 text-sm text-slate-400">
+              No places found nearby. Try the street or town name.
             </li>
-          ))}
+          )}
         </ul>
       )}
     </div>
@@ -156,10 +275,21 @@ export function RouteEditor({
 }) {
   const [o, setO] = useState<Place | null>(origin);
   const [d, setD] = useState<Place | null>(dest);
+  const [recents, setRecents] = useState<Place[]>([]);
+
   useEffect(() => {
     setO(origin);
     setD(dest);
+    if (open) setRecents(loadRecents());
   }, [origin, dest, open]);
+
+  function picked(setter: (p: Place) => void) {
+    return (p: Place) => {
+      setter(p);
+      saveRecent(p);
+      setRecents(loadRecents());
+    };
+  }
 
   if (!open) return null;
 
@@ -180,8 +310,8 @@ export function RouteEditor({
           </button>
         </div>
         <div className="space-y-4">
-          <PlaceField id="from" label="Starting point" initial={origin} onSelect={setO} withLocation />
-          <PlaceField id="to" label="Destination" initial={dest} onSelect={setD} />
+          <PlaceField id="from" label="Starting point" initial={origin} recents={recents} onSelect={picked(setO)} withLocation />
+          <PlaceField id="to" label="Destination" initial={dest} recents={recents} onSelect={picked(setD)} />
         </div>
         <div className="mt-5 flex gap-3">
           <button
@@ -192,7 +322,7 @@ export function RouteEditor({
               }
             }}
             disabled={!o || !d}
-            className="flex-1 rounded-xl bg-sky-600 py-2.5 text-sm font-medium text-white hover:bg-sky-700 disabled:opacity-50"
+            className="pressable flex-1 rounded-xl bg-sky-600 py-2.5 text-sm font-medium text-white hover:bg-sky-700 disabled:opacity-50"
           >
             Save route
           </button>
