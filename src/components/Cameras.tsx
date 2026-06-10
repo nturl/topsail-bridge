@@ -3,9 +3,31 @@
 import { useEffect, useRef, useState } from "react";
 
 const ISLAND_HLS = "https://www.surfchex.com/hls/sciga/index.m3u8";
-const MAINLAND_IMG = "https://www.drivenc.gov/map/Cctv/5400";
 // NCDOT serves this exact PNG (constant size) when a camera is temporarily down.
 const PLACEHOLDER_BYTES = 15136;
+
+const TABS = [
+  { key: "island", label: "Island roundabout", caption: "Live: Surf City roundabout, island side." },
+  { key: "mainland", label: "Mainland NC-210", caption: "NC-210 approach on the mainland, via NCDOT." },
+  { key: "us17", label: "US-17 Scotts Hill", caption: "US-17 at Scotts Hill, on the Wilmington run, via NCDOT." },
+] as const;
+type CamKey = (typeof TABS)[number]["key"];
+
+// Snapshots come through /api/cam (server-side proxy) because NCDOT's CORS
+// headers are malformed for direct browser fetches; the DriveNC link is the
+// upstream source for humans.
+const NCDOT: Record<Exclude<CamKey, "island">, { id: string; alt: string; offlineSubtitle: string }> = {
+  mainland: {
+    id: "5400",
+    alt: "NC-210 mainland approach to the Surf City bridge",
+    offlineSubtitle: "NC-210 mainland feed",
+  },
+  us17: {
+    id: "6043",
+    alt: "US-17 at Scotts Hill, between Hampstead and Wilmington",
+    offlineSubtitle: "US-17 Scotts Hill feed",
+  },
+};
 
 // Topsail Island oval, recreated in the generic regional-sticker style (initials
 // + place name in an oval) rather than copying any specific brand's logo.
@@ -148,18 +170,19 @@ function IslandVideo() {
   );
 }
 
-// Mainland NC-210: NCDOT gates the video, but serves a public snapshot PNG that
+// NCDOT gates its live video, but serves a public snapshot PNG per camera that
 // updates ~every minute. Refresh it on an interval with a cache-bust.
-function MainlandSnapshot() {
+function NcdotSnapshot({ cam }: { cam: (typeof NCDOT)[Exclude<CamKey, "island">] }) {
   // "loading" | "offline" (cam down / NCDOT placeholder) | { url } (live frame)
   const [state, setState] = useState<"loading" | "offline" | { url: string }>("loading");
 
   useEffect(() => {
     let alive = true;
     let objUrl: string | null = null;
+    setState("loading");
     const load = async () => {
       try {
-        const r = await fetch(`${MAINLAND_IMG}?t=${Date.now()}`, { cache: "no-store" });
+        const r = await fetch(`/api/cam?id=${cam.id}&t=${Date.now()}`, { cache: "no-store" });
         if (!r.ok) {
           if (alive) setState("offline");
           return;
@@ -184,17 +207,17 @@ function MainlandSnapshot() {
       clearInterval(id);
       if (objUrl) URL.revokeObjectURL(objUrl);
     };
-  }, []);
+  }, [cam]);
 
   if (state === "loading") {
-    return <CamPlaceholder pulse subtitle="Loading mainland view…" />;
+    return <CamPlaceholder pulse subtitle="Loading camera view…" />;
   }
   if (state === "offline") {
     return (
       <CamPlaceholder
         title="Camera is down right now"
-        subtitle="NC-210 mainland feed"
-        href={MAINLAND_IMG}
+        subtitle={cam.offlineSubtitle}
+        href={`https://www.drivenc.gov/map/Cctv/${cam.id}`}
         hrefLabel="Check on DriveNC"
       />
     );
@@ -202,11 +225,7 @@ function MainlandSnapshot() {
   return (
     <div className="relative overflow-hidden rounded-2xl bg-slate-900">
       {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img
-        src={state.url}
-        alt="NC-210 mainland approach to the Surf City bridge"
-        className="aspect-video w-full object-cover"
-      />
+      <img src={state.url} alt={cam.alt} className="aspect-video w-full object-cover" />
       <span className="absolute left-2 top-2 rounded-full bg-black/55 px-2 py-0.5 text-[10px] font-medium text-white backdrop-blur">
         NCDOT · refreshes ~1 min
       </span>
@@ -215,29 +234,25 @@ function MainlandSnapshot() {
 }
 
 export function Cameras() {
-  const [view, setView] = useState<"island" | "mainland">("island");
-  const tab = "pressable rounded-full px-3 py-1 transition-colors";
+  const [view, setView] = useState<CamKey>("island");
+  const tab = "pressable shrink-0 rounded-full px-3 py-1 transition-colors";
   const active = "bg-white text-slate-900 shadow-sm dark:bg-slate-700 dark:text-white";
   const idle = "text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200";
+  const current = TABS.find((t) => t.key === view) ?? TABS[0];
 
   return (
     <div>
-      <div className="mb-3 inline-flex rounded-full bg-slate-100 p-0.5 text-xs font-medium dark:bg-slate-800">
-        <button onClick={() => setView("island")} className={`${tab} ${view === "island" ? active : idle}`}>
-          Island roundabout
-        </button>
-        <button onClick={() => setView("mainland")} className={`${tab} ${view === "mainland" ? active : idle}`}>
-          Mainland NC-210
-        </button>
+      <div className="mb-3 flex max-w-full overflow-x-auto rounded-full bg-slate-100 p-0.5 text-xs font-medium dark:bg-slate-800">
+        {TABS.map((t) => (
+          <button key={t.key} onClick={() => setView(t.key)} className={`${tab} ${view === t.key ? active : idle}`}>
+            {t.label}
+          </button>
+        ))}
       </div>
 
-      {view === "island" ? <IslandVideo /> : <MainlandSnapshot />}
+      {view === "island" ? <IslandVideo /> : <NcdotSnapshot cam={NCDOT[view]} />}
 
-      <p className="mt-2 text-xs text-slate-400">
-        {view === "island"
-          ? "Live: Surf City roundabout, island side."
-          : "NC-210 approach on the mainland, via NCDOT."}
-      </p>
+      <p className="mt-2 text-xs text-slate-400">{current.caption}</p>
     </div>
   );
 }
