@@ -3,7 +3,8 @@ import type { MetadataRoute } from "next";
 export default function manifest(): MetadataRoute.Manifest {
   return {
     name: "Topsail Traffic",
-    short_name: "Topsail",
+    // Pre-fills the Add to Home Screen name; "Topsail" alone read as a typo.
+    short_name: "Topsail Traffic",
     description: "When to leave (and return to) Topsail Island. Live and predicted Surf City bridge traffic.",
     start_url: "/",
     display: "standalone",

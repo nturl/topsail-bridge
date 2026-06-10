@@ -58,6 +58,7 @@ export default function Page() {
   const [direction, setDirection] = useState<Direction>("out");
   const [editing, setEditing] = useState(false);
   const [installOpen, setInstallOpen] = useState(false);
+  const [standalone, setStandalone] = useState(false);
   const [hydrated, setHydrated] = useState(false);
   const [forecast, setForecast] = useState<Forecast | null>(null);
   const [conditions, setConditions] = useState<ConditionsData | null>(null);
@@ -76,6 +77,10 @@ export default function Page() {
     } catch {
       /* ignore */
     }
+    setStandalone(
+      window.matchMedia?.("(display-mode: standalone)").matches ||
+        (navigator as Navigator & { standalone?: boolean }).standalone === true,
+    );
     setHydrated(true);
   }, []);
 
@@ -209,16 +214,41 @@ export default function Page() {
   return (
     <main className="mx-auto w-full max-w-5xl px-5 py-8 md:py-12">
       <header className="mb-5 animate-fade-up">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex min-w-0 items-center gap-3">
             <HeaderMark />
-            <h1 className="font-serif text-4xl tracking-tight md:text-5xl">Topsail Traffic</h1>
+            <h1 className="truncate font-serif text-4xl tracking-tight md:text-5xl">Topsail Traffic</h1>
           </div>
-          <span className="hidden text-xs text-slate-400 sm:block">Surf City bridge</span>
+          {!standalone && (
+            <button
+              onClick={() => setInstallOpen(true)}
+              className="pressable hidden shrink-0 items-center gap-1.5 rounded-full border border-sky-200 bg-white px-3.5 py-1.5 text-xs font-semibold text-sky-700 shadow-sm transition-colors hover:border-sky-300 sm:inline-flex dark:border-sky-500/30 dark:bg-slate-900 dark:text-sky-400 dark:hover:border-sky-500/50"
+            >
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
+                <rect x="6.5" y="2.5" width="11" height="19" rx="3" />
+                <path d="M10.5 18.5h3" />
+              </svg>
+              Get the app
+            </button>
+          )}
         </div>
-        <p className="mt-1.5 text-sm text-slate-500 dark:text-slate-400">
-          When to leave (and return to) Topsail Island.
-        </p>
+        <div className="mt-1.5 flex items-center justify-between gap-3">
+          <p className="text-sm text-slate-500 dark:text-slate-400">
+            When to leave (and return to) Topsail Island.
+          </p>
+          {!standalone && (
+            <button
+              onClick={() => setInstallOpen(true)}
+              className="pressable inline-flex shrink-0 items-center gap-1.5 rounded-full border border-sky-200 bg-white px-3 py-1.5 text-xs font-semibold text-sky-700 shadow-sm sm:hidden dark:border-sky-500/30 dark:bg-slate-900 dark:text-sky-400"
+            >
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
+                <rect x="6.5" y="2.5" width="11" height="19" rx="3" />
+                <path d="M10.5 18.5h3" />
+              </svg>
+              Get the app
+            </button>
+          )}
+        </div>
       </header>
 
       {/* Route control */}
@@ -338,7 +368,7 @@ export default function Page() {
               onClick={() => setInstallOpen(true)}
               className="mx-auto mt-3 block text-xs text-white/85 underline underline-offset-4 hover:text-white"
             >
-              or add it to your phone
+              or get the app on your phone
             </button>
           </section>
           <section className={CARD} style={{ animationDelay: "80ms" }}>
@@ -367,12 +397,14 @@ export default function Page() {
             : ""}
         </span>
       </section>
-      <button
-        onClick={() => setInstallOpen(true)}
-        className="mx-auto mt-4 block text-xs text-slate-500 underline underline-offset-4 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200"
-      >
-        Add it to your phone
-      </button>
+      {!standalone && (
+        <button
+          onClick={() => setInstallOpen(true)}
+          className="mx-auto mt-4 block text-xs text-slate-500 underline underline-offset-4 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200"
+        >
+          Get the app
+        </button>
+      )}
       <p className="mt-2 text-center text-[11px] leading-relaxed text-slate-400">
         Live + predicted traffic from Mapbox. Bridge cam by Surf City IGA, incidents from NCDOT DriveNC, tides
         from NOAA.
