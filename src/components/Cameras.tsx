@@ -9,7 +9,6 @@ const PLACEHOLDER_BYTES = 15136;
 const TABS = [
   { key: "island", label: "Island roundabout", caption: "Live: Surf City roundabout, island side." },
   { key: "mainland", label: "Mainland NC-210", caption: "NC-210 approach on the mainland, via NCDOT." },
-  { key: "us17", label: "US-17 Scotts Hill", caption: "US-17 at Scotts Hill, on the Wilmington run, via NCDOT." },
 ] as const;
 type CamKey = (typeof TABS)[number]["key"];
 
@@ -21,11 +20,6 @@ const NCDOT: Record<Exclude<CamKey, "island">, { id: string; alt: string; offlin
     id: "5400",
     alt: "NC-210 mainland approach to the Surf City bridge",
     offlineSubtitle: "NC-210 mainland feed",
-  },
-  us17: {
-    id: "6043",
-    alt: "US-17 at Scotts Hill, between Hampstead and Wilmington",
-    offlineSubtitle: "US-17 Scotts Hill feed",
   },
 };
 

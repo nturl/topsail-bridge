@@ -5,7 +5,6 @@ import { NextRequest } from "next/server";
 // can't fetch it directly; server-side we don't care. Allowlisted ids only.
 const CAMS: Record<string, string> = {
   "5400": "https://www.drivenc.gov/map/Cctv/5400", // NC-210 at JH Batts Rd (mainland approach)
-  "6043": "https://www.drivenc.gov/map/Cctv/6043", // US-17 at Scotts Hill (Wilmington run)
 };
 
 export async function GET(req: NextRequest) {
