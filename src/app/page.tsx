@@ -185,6 +185,21 @@ export default function Page() {
     }
   }
 
+  function clearRoute() {
+    setRoute(null);
+    setForecast(null);
+    setHistory(null);
+    setError(null);
+    setUpdatedAt(null);
+    setDirection("out");
+    setEditing(false);
+    try {
+      localStorage.removeItem(LS_KEY);
+    } catch {
+      /* ignore */
+    }
+  }
+
   const from = route ? (direction === "out" ? route.origin : route.dest) : null;
   const to = route ? (direction === "out" ? route.dest : route.origin) : null;
   const hasCurve = !!forecast && forecast.points.filter((p) => p.minutes != null).length > 1;
@@ -362,6 +377,7 @@ export default function Page() {
         origin={route?.origin ?? null}
         dest={route?.dest ?? null}
         onApply={applyRoute}
+        onClear={route ? clearRoute : undefined}
         onClose={() => setEditing(false)}
       />
     </main>

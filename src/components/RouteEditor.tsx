@@ -93,7 +93,10 @@ function PlaceField({
         id={id}
         value={q}
         onChange={(e) => onChange(e.target.value)}
-        onFocus={() => setOpen(true)}
+        onFocus={(e) => {
+          setOpen(true);
+          e.target.select(); // typing a new place replaces the old one
+        }}
         autoComplete="off"
         placeholder="Search an address or place"
         className="mt-1 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm outline-none focus:border-sky-400 dark:border-slate-700 dark:bg-slate-800"
@@ -141,12 +144,14 @@ export function RouteEditor({
   origin,
   dest,
   onApply,
+  onClear,
   onClose,
 }: {
   open: boolean;
   origin: Place | null;
   dest: Place | null;
   onApply: (o: Place, d: Place) => void;
+  onClear?: () => void;
   onClose: () => void;
 }) {
   const [o, setO] = useState<Place | null>(origin);
@@ -198,6 +203,15 @@ export function RouteEditor({
             Cancel
           </button>
         </div>
+        {onClear && (
+          <button
+            type="button"
+            onClick={onClear}
+            className="mx-auto mt-4 block text-xs text-slate-400 transition-colors hover:text-rose-600 dark:hover:text-rose-400"
+          >
+            Clear saved route
+          </button>
+        )}
         <p className="mt-3 text-center text-[11px] text-slate-400">
           Saved on this device. Use the toggle to flip direction.
         </p>

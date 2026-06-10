@@ -236,7 +236,7 @@ export function Cameras() {
 
   return (
     <div>
-      <div className="mb-3 flex max-w-full overflow-x-auto rounded-full bg-slate-100 p-0.5 text-xs font-medium dark:bg-slate-800">
+      <div className="mb-3 inline-flex rounded-full bg-slate-100 p-0.5 text-xs font-medium dark:bg-slate-800">
         {TABS.map((t) => (
           <button key={t.key} onClick={() => setView(t.key)} className={`${tab} ${view === t.key ? active : idle}`}>
             {t.label}
