@@ -9,6 +9,17 @@ const nextConfig: NextConfig = {
     root: here,
   },
   outputFileTracingRoot: here,
+  // topsail.live is a short alias; topsailtraffic.com is canonical.
+  async redirects() {
+    return [
+      {
+        source: "/:path*",
+        has: [{ type: "host", value: "topsail.live" }],
+        destination: "https://topsailtraffic.com/:path*",
+        permanent: true,
+      },
+    ];
+  },
 };
 
 export default nextConfig;
