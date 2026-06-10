@@ -10,6 +10,7 @@ import { RouteMap } from "@/components/RouteMap";
 import { RouteEditor } from "@/components/RouteEditor";
 import { TripPlanner } from "@/components/TripPlanner";
 import { InstallSheet } from "@/components/InstallSheet";
+import { sharePage } from "@/lib/share";
 
 const LS_KEY = "bw.route.v1";
 
@@ -59,6 +60,7 @@ export default function Page() {
   const [editing, setEditing] = useState(false);
   const [installOpen, setInstallOpen] = useState(false);
   const [standalone, setStandalone] = useState(false);
+  const [shareLabel, setShareLabel] = useState("Share");
   const [hydrated, setHydrated] = useState(false);
   const [forecast, setForecast] = useState<Forecast | null>(null);
   const [conditions, setConditions] = useState<ConditionsData | null>(null);
@@ -397,14 +399,27 @@ export default function Page() {
             : ""}
         </span>
       </section>
-      {!standalone && (
+      <div className="mt-4 flex items-center justify-center gap-6">
+        {!standalone && (
+          <button
+            onClick={() => setInstallOpen(true)}
+            className="text-xs text-slate-500 underline underline-offset-4 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200"
+          >
+            Get the app
+          </button>
+        )}
         <button
-          onClick={() => setInstallOpen(true)}
-          className="mx-auto mt-4 block text-xs text-slate-500 underline underline-offset-4 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200"
+          onClick={async () => {
+            if ((await sharePage()) === "copied") {
+              setShareLabel("Link copied");
+              setTimeout(() => setShareLabel("Share"), 2000);
+            }
+          }}
+          className="text-xs text-slate-500 underline underline-offset-4 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200"
         >
-          Get the app
+          {shareLabel}
         </button>
-      )}
+      </div>
       <p className="mt-2 text-center text-[11px] leading-relaxed text-slate-400">
         Live + predicted traffic from Mapbox. Bridge cam by Surf City IGA, incidents from NCDOT DriveNC, tides
         from NOAA.

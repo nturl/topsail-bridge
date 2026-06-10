@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { sharePage } from "@/lib/share";
 
 // Chrome/Edge on Android (and desktop) fire this; iOS Safari never does.
 type InstallPromptEvent = Event & {
@@ -91,6 +92,7 @@ export function InstallSheet({ open, onClose }: { open: boolean; onClose: () => 
   const [installEvent, setInstallEvent] = useState<InstallPromptEvent | null>(null);
   const [ios, setIos] = useState(false);
   const [installed, setInstalled] = useState(false);
+  const [shareLabel, setShareLabel] = useState("Share it with a friend");
 
   useEffect(() => {
     setIos(/iPad|iPhone|iPod/.test(navigator.userAgent));
@@ -144,36 +146,56 @@ export function InstallSheet({ open, onClose }: { open: boolean; onClose: () => 
               Install Topsail Traffic
             </button>
           </div>
-        ) : ios ? (
-          <ol className="space-y-4">
-            <li>
-              <StepCaption n={1}>
-                Tap <span className="font-semibold">Share</span> in your browser
-              </StepCaption>
-              <BrowserBarMock />
-            </li>
-            <li>
-              <StepCaption n={2}>
-                Scroll down, tap <span className="font-semibold">Add to Home Screen</span>
-              </StepCaption>
-              <ShareMenuMock />
-            </li>
-            <li>
-              <StepCaption n={3}>
-                Tap <span className="font-semibold">Add</span>
-              </StepCaption>
-              <AddDialogMock />
-            </li>
-          </ol>
         ) : (
-          <p className="text-sm leading-relaxed text-slate-700 dark:text-slate-200">
-            Open <span className="font-semibold">topsailtraffic.com</span> on your phone, then choose{" "}
-            <span className="font-semibold">Install</span> or <span className="font-semibold">Add to Home Screen</span>{" "}
-            from your browser&rsquo;s menu.
-          </p>
+          <div>
+            {!ios && (
+              <p className="mb-3 text-sm leading-snug text-slate-700 dark:text-slate-200">
+                On your phone, open <span className="font-semibold">topsailtraffic.com</span>, then:
+              </p>
+            )}
+            <ol className="space-y-4">
+              <li>
+                <StepCaption n={1}>
+                  Tap <span className="font-semibold">Share</span> in Safari (or whichever browser you use)
+                </StepCaption>
+                <BrowserBarMock />
+              </li>
+              <li>
+                <StepCaption n={2}>
+                  Scroll down, tap <span className="font-semibold">Add to Home Screen</span>
+                </StepCaption>
+                <ShareMenuMock />
+              </li>
+              <li>
+                <StepCaption n={3}>
+                  Tap <span className="font-semibold">Add</span>
+                </StepCaption>
+                <AddDialogMock />
+              </li>
+            </ol>
+            {!ios && (
+              <p className="mt-3 text-xs leading-relaxed text-slate-400">
+                On Android it&rsquo;s one tap: choose <span className="font-medium">Install</span> from the browser
+                menu.
+              </p>
+            )}
+          </div>
         )}
 
-        <p className="mt-4 text-center text-[11px] text-slate-400">
+        <button
+          onClick={async () => {
+            if ((await sharePage()) === "copied") {
+              setShareLabel("Link copied");
+              setTimeout(() => setShareLabel("Share it with a friend"), 2000);
+            }
+          }}
+          className="pressable mt-4 flex w-full items-center justify-center gap-2 rounded-xl border border-slate-200 py-2.5 text-sm font-medium text-slate-700 hover:border-sky-300 dark:border-slate-700 dark:text-slate-200 dark:hover:border-sky-700"
+        >
+          <ShareIcon />
+          {shareLabel}
+        </button>
+
+        <p className="mt-3 text-center text-[11px] text-slate-400">
           No app store, nothing to download. It&rsquo;s free.
         </p>
       </div>
