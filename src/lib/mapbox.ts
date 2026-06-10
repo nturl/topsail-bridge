@@ -11,20 +11,48 @@ const BBOX = "-78.7,33.7,-77.0,35.2";
 
 export const TYPICAL_HOURS = Array.from({ length: 16 }, (_, i) => i + 6); // 6a..9p
 
+// Search Box API (not the old v5 geocoder): real POI/brand fuzzy matching
+// ("foodlion" -> Food Lion) with results ranked by distance from the island.
 export async function geocodeSearch(q: string, limit = 5): Promise<Place[]> {
   if (!q.trim() || !TOKEN) return [];
-  const url = `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(
+  const url = `https://api.mapbox.com/search/searchbox/v1/forward?q=${encodeURIComponent(
     q,
-  )}.json?access_token=${TOKEN}&limit=${limit}&country=us&proximity=${PROXIMITY}&bbox=${BBOX}&types=address,poi,place,locality,neighborhood`;
+  )}&access_token=${TOKEN}&limit=8&country=us&proximity=${PROXIMITY}&bbox=${BBOX}&types=poi,address,place,locality,neighborhood`;
   const r = await fetch(url, { next: { revalidate: 86_400 } });
   if (!r.ok) return [];
-  const j = (await r.json()) as { features?: Array<{ text?: string; place_name?: string; center: [number, number] }> };
-  return (j.features ?? []).map((f) => ({
-    label: f.text ?? f.place_name ?? q,
-    address: f.place_name ?? q,
-    lng: f.center[0],
-    lat: f.center[1],
-  }));
+  const j = (await r.json()) as {
+    features?: Array<{
+      properties?: {
+        name?: string;
+        full_address?: string;
+        place_formatted?: string;
+        distance?: number; // meters from proximity point
+        coordinates?: { longitude?: number; latitude?: number };
+      };
+    }>;
+  };
+  const out: Place[] = [];
+  const seen = new Set<string>();
+  for (const f of j.features ?? []) {
+    const p = f.properties ?? {};
+    const lng = p.coordinates?.longitude;
+    const lat = p.coordinates?.latitude;
+    if (lng == null || lat == null) continue;
+    // The same venue often arrives from multiple data sources; collapse on
+    // name + ~100 m grid.
+    const key = `${(p.name ?? "").toLowerCase()}|${lng.toFixed(3)},${lat.toFixed(3)}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push({
+      label: p.name ?? q,
+      address: p.full_address ?? p.place_formatted ?? p.name ?? q,
+      lng,
+      lat,
+      distanceMi: p.distance != null ? Math.round((p.distance / 1609.34) * 10) / 10 : undefined,
+    });
+    if (out.length === limit) break;
+  }
+  return out;
 }
 
 export async function reverseGeocode(lng: number, lat: number): Promise<Place | null> {

@@ -1,6 +1,12 @@
 export type LngLat = { lng: number; lat: number };
 
-export type Place = { label: string; address: string; lng: number; lat: number };
+export type Place = {
+  label: string;
+  address: string;
+  lng: number;
+  lat: number;
+  distanceMi?: number; // straight-line miles from the island, for search suggestions
+};
 
 export type ForecastPoint = {
   offsetMin: number; // minutes from "now"

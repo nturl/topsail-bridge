@@ -120,7 +120,12 @@ function PlaceField({
                 onClick={() => pick(s)}
                 className="block w-full px-3 py-2 text-left hover:bg-sky-50 dark:hover:bg-slate-700"
               >
-                <span className="text-sm font-medium">{s.label}</span>
+                <span className="flex items-baseline justify-between gap-2">
+                  <span className="truncate text-sm font-medium">{s.label}</span>
+                  {s.distanceMi != null && (
+                    <span className="shrink-0 text-xs text-slate-400">{s.distanceMi} mi</span>
+                  )}
+                </span>
                 <span className="block truncate text-xs text-slate-400">{s.address}</span>
               </button>
             </li>
