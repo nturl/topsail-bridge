@@ -25,9 +25,9 @@ const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "https://topsailtraffic.com
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
-  title: "Topsail Traffic",
+  title: "Topsail Traffic | Surf City Bridge Live Traffic & Cam",
   description:
-    "When to leave (and return to) Topsail Island. Live and predicted traffic across the Surf City bridge, your weekly rhythm, the live bridge cam, and NCDOT incidents.",
+    "When to leave (and return to) Topsail Island, NC. Live and predicted drive times across the Surf City bridge, the live bridge cam, a 7-day trip planner, tides, and NCDOT alerts. Free, no ads.",
   applicationName: "Topsail Traffic",
   appleWebApp: {
     capable: true,
@@ -102,6 +102,23 @@ export default function RootLayout({
           {`window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };`}
         </Script>
         <Script src="/_vercel/insights/script.js" strategy="afterInteractive" />
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{
+            __html: JSON.stringify({
+              "@context": "https://schema.org",
+              "@type": "WebApplication",
+              name: "Topsail Traffic",
+              url: "https://topsailtraffic.com",
+              description:
+                "Live and predicted traffic across the Surf City bridge: when to leave (and return to) Topsail Island, NC.",
+              applicationCategory: "TravelApplication",
+              operatingSystem: "Any",
+              offers: { "@type": "Offer", price: "0", priceCurrency: "USD" },
+              about: { "@type": "Place", name: "Surf City Bridge, Topsail Island, North Carolina" },
+            }),
+          }}
+        />
       </body>
     </html>
   );
