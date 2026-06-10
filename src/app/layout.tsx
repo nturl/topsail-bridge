@@ -1,8 +1,8 @@
 import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono, Instrument_Serif } from "next/font/google";
+import Script from "next/script";
 import "./globals.css";
 import { ServiceWorkerRegister } from "@/components/ServiceWorkerRegister";
-import { Analytics } from "@vercel/analytics/next";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -94,7 +94,14 @@ export default function RootLayout({
       >
         {children}
         <ServiceWorkerRegister />
-        <Analytics />
+        {/* Web Analytics via the documented manual snippet: the component's
+            client-side script injection was losing its tag to head
+            reconciliation, so the dashboard sat at zero. script.js auto-tracks
+            pageviews and SPA navigations. */}
+        <Script id="va-init" strategy="afterInteractive">
+          {`window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };`}
+        </Script>
+        <Script src="/_vercel/insights/script.js" strategy="afterInteractive" />
       </body>
     </html>
   );
