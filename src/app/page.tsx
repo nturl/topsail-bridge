@@ -9,6 +9,7 @@ import { Heatmap } from "@/components/Heatmap";
 import { RouteMap } from "@/components/RouteMap";
 import { RouteEditor } from "@/components/RouteEditor";
 import { TripPlanner } from "@/components/TripPlanner";
+import { InstallSheet } from "@/components/InstallSheet";
 
 const LS_KEY = "bw.route.v1";
 
@@ -56,6 +57,7 @@ export default function Page() {
   const [route, setRoute] = useState<Route | null>(null);
   const [direction, setDirection] = useState<Direction>("out");
   const [editing, setEditing] = useState(false);
+  const [installOpen, setInstallOpen] = useState(false);
   const [hydrated, setHydrated] = useState(false);
   const [forecast, setForecast] = useState<Forecast | null>(null);
   const [conditions, setConditions] = useState<ConditionsData | null>(null);
@@ -332,6 +334,12 @@ export default function Page() {
             >
               Set your route
             </button>
+            <button
+              onClick={() => setInstallOpen(true)}
+              className="mx-auto mt-3 block text-xs text-white/85 underline underline-offset-4 hover:text-white"
+            >
+              or add it to your phone
+            </button>
           </section>
           <section className={CARD} style={{ animationDelay: "80ms" }}>
             <Conditions data={conditions} />
@@ -359,6 +367,12 @@ export default function Page() {
             : ""}
         </span>
       </section>
+      <button
+        onClick={() => setInstallOpen(true)}
+        className="mx-auto mt-4 block text-xs text-slate-500 underline underline-offset-4 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200"
+      >
+        Add it to your phone
+      </button>
       <p className="mt-2 text-center text-[11px] leading-relaxed text-slate-400">
         Live + predicted traffic from Mapbox. Bridge cam by Surf City IGA, incidents from NCDOT DriveNC, tides
         from NOAA.
@@ -380,6 +394,7 @@ export default function Page() {
         onClear={route ? clearRoute : undefined}
         onClose={() => setEditing(false)}
       />
+      <InstallSheet open={installOpen} onClose={() => setInstallOpen(false)} />
     </main>
   );
 }
