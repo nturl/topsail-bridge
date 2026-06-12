@@ -85,6 +85,18 @@ function IslandVideo() {
   const ref = useRef<HTMLVideoElement>(null);
   const [failed, setFailed] = useState(false);
   const [paused, setPaused] = useState(true);
+  const [attempt, setAttempt] = useState(0);
+
+  // The feed comes and goes at Surfchex's end; recheck every few minutes so
+  // the view recovers mid-session instead of waiting for a reload.
+  useEffect(() => {
+    if (!failed) return;
+    const id = setTimeout(() => {
+      setFailed(false);
+      setAttempt((a) => a + 1);
+    }, 180_000);
+    return () => clearTimeout(id);
+  }, [failed]);
 
   useEffect(() => {
     const video = ref.current;
@@ -121,12 +133,13 @@ function IslandVideo() {
       video.removeEventListener("pause", onPause);
       hls?.destroy();
     };
-  }, []);
+  }, [attempt]);
 
   if (failed) {
     return (
       <CamPlaceholder
         title="Camera is down right now"
+        subtitle="Rechecking automatically every few minutes"
         href="https://www.surfchex.com/cams/surf-city-bridge/"
         hrefLabel="Open live cam"
       />
