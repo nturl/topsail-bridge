@@ -30,6 +30,9 @@ function loadRoute(): Route | null {
 const CARD =
   "animate-fade-up rounded-3xl border border-slate-200/70 bg-white p-5 shadow-[0_1px_2px_rgba(2,6,23,0.04),0_16px_40px_-24px_rgba(2,6,23,0.25)] dark:border-white/10 dark:bg-slate-900 dark:shadow-[0_16px_40px_-24px_rgba(0,0,0,0.8)]";
 
+const PILL_BTN =
+  "pressable inline-flex shrink-0 items-center gap-1.5 rounded-full border border-sky-200 bg-white px-4 py-2 text-[13px] font-semibold text-sky-700 shadow-sm transition-colors hover:border-sky-300 dark:border-sky-500/30 dark:bg-slate-900 dark:text-sky-400 dark:hover:border-sky-500/50";
+
 // Unified small-caps card label, matching the hero's "Leave now".
 const LABEL = "text-[11px] font-medium uppercase tracking-[0.08em] text-slate-400";
 
@@ -213,6 +216,36 @@ export default function Page() {
   const to = route ? (direction === "out" ? route.dest : route.origin) : null;
   const hasCurve = !!forecast && forecast.points.filter((p) => p.minutes != null).length > 1;
 
+  const headerPills = (
+    <>
+      <button
+        onClick={async () => {
+          if ((await sharePage()) === "copied") {
+            setShareLabel("Copied");
+            setTimeout(() => setShareLabel("Share"), 2000);
+          }
+        }}
+        className={PILL_BTN}
+      >
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M12 3v12" />
+          <path d="m8 7 4-4 4 4" />
+          <path d="M5 11v8a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-8" />
+        </svg>
+        {shareLabel}
+      </button>
+      {!standalone && (
+        <button onClick={() => setInstallOpen(true)} className={PILL_BTN}>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
+            <rect x="6.5" y="2.5" width="11" height="19" rx="3" />
+            <path d="M10.5 18.5h3" />
+          </svg>
+          Get the app
+        </button>
+      )}
+    </>
+  );
+
   return (
     <main className="mx-auto w-full max-w-5xl px-5 py-8 md:py-12">
       <header className="mb-5 animate-fade-up">
@@ -221,36 +254,12 @@ export default function Page() {
             <HeaderMark />
             <h1 className="truncate font-serif text-4xl tracking-tight md:text-5xl">Topsail Traffic</h1>
           </div>
-          {!standalone && (
-            <button
-              onClick={() => setInstallOpen(true)}
-              className="pressable hidden shrink-0 items-center gap-1.5 rounded-full border border-sky-200 bg-white px-3.5 py-1.5 text-xs font-semibold text-sky-700 shadow-sm transition-colors hover:border-sky-300 sm:inline-flex dark:border-sky-500/30 dark:bg-slate-900 dark:text-sky-400 dark:hover:border-sky-500/50"
-            >
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
-                <rect x="6.5" y="2.5" width="11" height="19" rx="3" />
-                <path d="M10.5 18.5h3" />
-              </svg>
-              Get the app
-            </button>
-          )}
+          <div className="hidden shrink-0 items-center gap-2 sm:flex">{headerPills}</div>
         </div>
-        <div className="mt-1.5 flex items-center justify-between gap-3">
-          <p className="text-sm text-slate-500 dark:text-slate-400">
-            When to leave (and return to) Topsail Island.
-          </p>
-          {!standalone && (
-            <button
-              onClick={() => setInstallOpen(true)}
-              className="pressable inline-flex shrink-0 items-center gap-1.5 rounded-full border border-sky-200 bg-white px-3 py-1.5 text-xs font-semibold text-sky-700 shadow-sm sm:hidden dark:border-sky-500/30 dark:bg-slate-900 dark:text-sky-400"
-            >
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
-                <rect x="6.5" y="2.5" width="11" height="19" rx="3" />
-                <path d="M10.5 18.5h3" />
-              </svg>
-              Get the app
-            </button>
-          )}
-        </div>
+        <p className="mt-1.5 text-sm text-slate-500 dark:text-slate-400">
+          When to leave (and return to) Topsail Island.
+        </p>
+        <div className="mt-2.5 flex items-center gap-2 sm:hidden">{headerPills}</div>
       </header>
 
       {/* Route control */}
@@ -399,27 +408,6 @@ export default function Page() {
             : ""}
         </span>
       </section>
-      <div className="mt-4 flex items-center justify-center gap-6">
-        {!standalone && (
-          <button
-            onClick={() => setInstallOpen(true)}
-            className="text-xs text-slate-500 underline underline-offset-4 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200"
-          >
-            Get the app
-          </button>
-        )}
-        <button
-          onClick={async () => {
-            if ((await sharePage()) === "copied") {
-              setShareLabel("Link copied");
-              setTimeout(() => setShareLabel("Share"), 2000);
-            }
-          }}
-          className="text-xs text-slate-500 underline underline-offset-4 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200"
-        >
-          {shareLabel}
-        </button>
-      </div>
       <p className="mt-2 text-center text-[11px] leading-relaxed text-slate-400">
         Live + predicted traffic from Mapbox. Bridge cam by Surf City IGA, incidents from NCDOT DriveNC, tides
         from NOAA.
