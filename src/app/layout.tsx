@@ -102,6 +102,8 @@ export default function RootLayout({
           {`window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };`}
         </Script>
         <Script src="/_vercel/insights/script.js" strategy="afterInteractive" />
+        {/* Pulse: Noel's own first-party analytics. */}
+        <Script data-site="topsail" src="https://pulse-nturls-projects.vercel.app/p.js" strategy="afterInteractive" />
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{
