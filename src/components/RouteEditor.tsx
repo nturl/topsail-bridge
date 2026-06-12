@@ -337,7 +337,7 @@ export function RouteEditor({
           <button
             type="button"
             onClick={onClear}
-            className="mx-auto mt-4 block text-xs text-slate-400 transition-colors hover:text-rose-600 dark:hover:text-rose-400"
+            className="pressable mt-3 w-full rounded-xl border border-rose-200 bg-rose-50 py-2.5 text-sm font-medium text-rose-700 transition-colors hover:bg-rose-100 dark:border-rose-500/25 dark:bg-rose-500/10 dark:text-rose-400 dark:hover:bg-rose-500/15"
           >
             Clear saved route
           </button>
