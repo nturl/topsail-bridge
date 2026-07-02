@@ -1,0 +1,37 @@
+name: fb-post
+
+# Summer cadence, America/New_York (crons are UTC; these assume EDT, so posts
+# shift an hour later in winter — fine, since the calendar is summer-focused):
+#   Fri 3:30pm  weekend outlook
+#   Sat 8:30am  turnover day
+#   Sun 10:30am return traffic
+# The script is a silent no-op until FB_PAGE_ID / FB_PAGE_TOKEN secrets exist
+# (see docs/facebook-setup.md), so this is safe to keep enabled year-round.
+on:
+  schedule:
+    - cron: "30 19 * * 5"
+    - cron: "30 12 * * 6"
+    - cron: "30 14 * * 0"
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "Post style"
+        required: false
+        type: choice
+        options: [outlook, weekend, turnover, return]
+        default: outlook
+
+jobs:
+  post:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - run: node scripts/fb-post.mjs ${{ inputs.mode }}
+        env:
+          FB_PAGE_ID: ${{ secrets.FB_PAGE_ID }}
+          FB_PAGE_TOKEN: ${{ secrets.FB_PAGE_TOKEN }}
