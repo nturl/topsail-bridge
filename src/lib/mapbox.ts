@@ -15,7 +15,9 @@ export const TYPICAL_HOURS = Array.from({ length: 16 }, (_, i) => i + 6); // 6a.
 // Search Box API (not the old v5 geocoder): real POI/brand fuzzy matching
 // ("foodlion" -> Food Lion) with results ranked by distance from the island.
 export async function geocodeSearch(q: string, limit = 5): Promise<Place[]> {
-  if (!q.trim() || !TOKEN) return [];
+  // 1-2 character prefixes are never useful results, but each unique one is a
+  // billable Search Box request; wait for a real query.
+  if (q.trim().length < 3 || !TOKEN) return [];
   const url = `https://api.mapbox.com/search/searchbox/v1/forward?q=${encodeURIComponent(
     q,
   )}&access_token=${TOKEN}&limit=8&country=us&proximity=${PROXIMITY}&bbox=${BBOX}&types=poi,address,place,locality,neighborhood`;
@@ -59,7 +61,8 @@ export async function geocodeSearch(q: string, limit = 5): Promise<Place[]> {
 export async function reverseGeocode(lng: number, lat: number): Promise<Place | null> {
   if (!TOKEN) return null;
   const url = `https://api.mapbox.com/geocoding/v5/mapbox.places/${lng},${lat}.json?access_token=${TOKEN}&limit=1`;
-  const r = await fetch(url);
+  // Coordinates arrive quantized (~11 m), so the same spot resolves once a day.
+  const r = await fetch(url, { next: { revalidate: 86_400 } });
   if (!r.ok) return null;
   const f = ((await r.json()) as { features?: Array<{ text?: string; place_name?: string }> }).features?.[0];
   return f ? { label: f.text ?? "My location", address: f.place_name ?? "My location", lng, lat } : null;
@@ -72,7 +75,7 @@ export type CongestionRoute = { polyline: string; congestion: string[] };
 export async function routeWithCongestion(o: LngLat, d: LngLat): Promise<CongestionRoute | null> {
   if (!TOKEN) return null;
   const url = `https://api.mapbox.com/directions/v5/mapbox/driving-traffic/${o.lng},${o.lat};${d.lng},${d.lat}?geometries=polyline&overview=full&annotations=congestion&access_token=${TOKEN}`;
-  const r = await fetch(url, { next: { revalidate: 120 } });
+  const r = await fetch(url, { next: { revalidate: 600 } });
   if (!r.ok) return null;
   const route = ((await r.json()) as {
     routes?: Array<{ geometry?: string; legs?: Array<{ annotation?: { congestion?: string[] } }> }>;
@@ -159,6 +162,10 @@ async function predictAt(coords: string, departStr: string): Promise<number | nu
   return route ? Math.round(route.duration / 60) : null;
 }
 
+// Traffic rhythm is smooth hour to hour, so sample every 3 hours and fill the
+// rest by linear interpolation: 42 Mapbox calls per new route instead of 112.
+const SAMPLE_HOURS = [6, 9, 12, 15, 18, 21];
+
 export async function generateTypical(o: LngLat, d: LngLat): Promise<Record<string, Record<string, number>>> {
   const grid: Record<string, Record<string, number>> = {};
   for (let dow = 0; dow < 7; dow++) grid[dow] = {};
@@ -171,7 +178,7 @@ export async function generateTypical(o: LngLat, d: LngLat): Promise<Record<stri
     const dt = new Date(start.getTime() + dayOffset * 86_400_000);
     const p = nyParts(dt);
     const dow = DOW[p.weekday];
-    for (const h of TYPICAL_HOURS) {
+    for (const h of SAMPLE_HOURS) {
       tasks.push({ dow, h, departStr: `${p.year}-${p.month}-${p.day}T${String(h).padStart(2, "0")}:00` });
     }
   }
@@ -182,6 +189,24 @@ export async function generateTypical(o: LngLat, d: LngLat): Promise<Record<stri
     slice.forEach((t, j) => {
       if (res[j] != null) grid[String(t.dow)][String(t.h)] = res[j] as number;
     });
+  }
+
+  for (let dow = 0; dow < 7; dow++) {
+    const day = grid[String(dow)];
+    for (const h of TYPICAL_HOURS) {
+      if (day[String(h)] != null) continue;
+      const below = [...SAMPLE_HOURS].reverse().find((s) => s < h && day[String(s)] != null);
+      const above = SAMPLE_HOURS.find((s) => s > h && day[String(s)] != null);
+      if (below != null && above != null) {
+        const lo = day[String(below)];
+        const hi = day[String(above)];
+        day[String(h)] = Math.round(lo + ((hi - lo) * (h - below)) / (above - below));
+      } else if (below != null) {
+        day[String(h)] = day[String(below)];
+      } else if (above != null) {
+        day[String(h)] = day[String(above)];
+      }
+    }
   }
   return grid;
 }

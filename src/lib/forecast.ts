@@ -42,17 +42,21 @@ function freeFlowDepartAt(): string {
   return `${p.year}-${p.month}-${p.day}T05:00`;
 }
 
-// One traffic-aware route lookup. departAt omitted => live conditions.
+// One traffic-aware route lookup. departAt omitted => live conditions, never
+// cached. Predicted (depart_at) lookups pass a revalidate so the Next data
+// cache dedupes them: the same (route, depart_at) pair is fetched from Mapbox
+// once and shared by every poll and every user until it expires.
 export async function routeDuration(
   o: LngLat,
   d: LngLat,
   departAt?: string,
+  revalidate?: number,
 ): Promise<{ minutes: number; distanceMi: number } | null> {
   if (!TOKEN) return null;
   const coords = `${o.lng},${o.lat};${d.lng},${d.lat}`;
   let url = `https://api.mapbox.com/directions/v5/mapbox/driving-traffic/${coords}?overview=false&access_token=${TOKEN}`;
   if (departAt) url += `&depart_at=${encodeURIComponent(departAt)}`;
-  const r = await fetch(url, { cache: "no-store" });
+  const r = await fetch(url, departAt && revalidate ? { next: { revalidate } } : { cache: "no-store" });
   if (!r.ok) return null;
   const j = await r.json();
   const route = j?.routes?.[0];
@@ -60,7 +64,15 @@ export async function routeDuration(
   return { minutes: route.duration / 60, distanceMi: route.distance / 1609.34 };
 }
 
-// Live "now" plus a predicted curve across the next few hours.
+// Predictions barely move within half an hour; the live point carries the
+// freshness. Free-flow ("tomorrow 5am") is the same answer all day.
+const PREDICTED_TTL = 1800;
+const FREE_FLOW_TTL = 86_400;
+
+// Live "now" plus a predicted curve across the next few hours. The predicted
+// points sit on absolute quarter-hour marks (not offsets from request time) so
+// their depart_at strings — and therefore their cache keys — are stable
+// across the client's 2-minute polls.
 export async function buildForecast(
   o: LngLat,
   d: LngLat,
@@ -68,18 +80,21 @@ export async function buildForecast(
   stepMin = 15,
 ): Promise<Forecast> {
   const start = new Date();
-  const offsets: number[] = [];
-  for (let m = 0; m <= horizonMin; m += stepMin) offsets.push(m);
+  const stepMs = stepMin * 60_000;
+  const firstMark = Math.ceil(start.getTime() / stepMs) * stepMs;
+  const marks: Date[] = [];
+  for (let i = 0; i < horizonMin / stepMin; i++) marks.push(new Date(firstMark + i * stepMs));
 
-  // Kick off the free-flow probe in parallel with the forecast points.
-  const freeFlowPromise = routeDuration(o, d, freeFlowDepartAt());
+  // Kick off the free-flow probe and the live reading in parallel with the
+  // predicted points.
+  const freeFlowPromise = routeDuration(o, d, freeFlowDepartAt(), FREE_FLOW_TTL);
+  const livePromise = routeDuration(o, d);
 
-  const raw = await Promise.all(
-    offsets.map(async (off) => {
-      const when = new Date(start.getTime() + off * 60_000);
-      const res = await routeDuration(o, d, off === 0 ? undefined : nyDepartAt(when));
+  const predicted = await Promise.all(
+    marks.map(async (when) => {
+      const res = await routeDuration(o, d, nyDepartAt(when), PREDICTED_TTL);
       return {
-        offsetMin: off,
+        offsetMin: Math.round((when.getTime() - start.getTime()) / 60_000),
         at: when.toISOString(),
         clock: nyClock(when),
         minutes: res ? Math.round(res.minutes) : null,
@@ -87,6 +102,18 @@ export async function buildForecast(
       };
     }),
   );
+
+  const live = await livePromise;
+  const raw = [
+    {
+      offsetMin: 0,
+      at: start.toISOString(),
+      clock: nyClock(start),
+      minutes: live ? Math.round(live.minutes) : null,
+      distanceMi: live?.distanceMi ?? null,
+    },
+    ...predicted,
+  ];
 
   const points: ForecastPoint[] = raw.map((p) => ({
     offsetMin: p.offsetMin,

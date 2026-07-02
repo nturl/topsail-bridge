@@ -3,6 +3,7 @@ import { unstable_cache } from "next/cache";
 import bundled from "@/data/typical.json";
 import { DEFAULT_ORIGIN, DEFAULT_DEST, canonicalDir } from "@/lib/places";
 import { generateTypical } from "@/lib/mapbox";
+import { inServiceArea, quantizePoint } from "@/lib/geo";
 import type { LngLat } from "@/lib/types";
 
 const RAW = "https://raw.githubusercontent.com/nturl/topsail-bridge/main/data/log.ndjson";
@@ -33,7 +34,7 @@ function median(a: number[]): number {
 function parse(s: string | null, fallback: LngLat): LngLat {
   if (s) {
     const [lng, lat] = s.split(",").map(Number);
-    if (Number.isFinite(lng) && Number.isFinite(lat)) return { lng, lat };
+    if (Number.isFinite(lng) && Number.isFinite(lat)) return quantizePoint({ lng, lat });
   }
   return fallback;
 }
@@ -42,6 +43,8 @@ export async function GET(req: NextRequest) {
   const sp = req.nextUrl.searchParams;
   const o = parse(sp.get("o"), DEFAULT_ORIGIN);
   const d = parse(sp.get("d"), DEFAULT_DEST);
+  // Non-canonical routes trigger a 42-call Mapbox generation; bound who can ask.
+  if (!inServiceArea(o) || !inServiceArea(d)) return new NextResponse(null, { status: 400 });
   const canon = canonicalDir(o, d);
 
   const hours = bundled.hours as number[];

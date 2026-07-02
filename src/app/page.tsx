@@ -11,6 +11,9 @@ import { RouteEditor } from "@/components/RouteEditor";
 import { TripPlanner } from "@/components/TripPlanner";
 import { InstallSheet } from "@/components/InstallSheet";
 import { sharePage } from "@/lib/share";
+import { coordParam } from "@/lib/geo";
+import { HeaderMark } from "@/components/HeaderMark";
+import { TipJar } from "@/components/TipJar";
 
 const LS_KEY = "bw.route.v1";
 
@@ -35,27 +38,6 @@ const PILL_BTN =
 
 // Unified small-caps card label, matching the hero's "Leave now".
 const LABEL = "text-[11px] font-medium uppercase tracking-[0.08em] text-slate-400";
-
-// The TI oval, sized for the header wordmark.
-function HeaderMark() {
-  return (
-    <svg width="36" height="24" viewBox="0 0 36 24" aria-hidden className="shrink-0">
-      <ellipse cx="18" cy="12" rx="16.5" ry="10.5" fill="#fff" stroke="#0f172a" strokeWidth="2.4" />
-      <text
-        x="18"
-        y="16.2"
-        textAnchor="middle"
-        fontSize="11.5"
-        fontWeight="800"
-        fill="#0f172a"
-        fontFamily="ui-sans-serif, system-ui"
-        letterSpacing="0.5"
-      >
-        TI
-      </text>
-    </svg>
-  );
-}
 
 export default function Page() {
   const [route, setRoute] = useState<Route | null>(null);
@@ -103,7 +85,11 @@ export default function Page() {
   useEffect(() => {
     if (!hydrated) return;
     fetchConditions();
-    const id = setInterval(fetchConditions, 300_000);
+    // Hidden tabs keep their timers running for days; the visibilitychange
+    // handler below refreshes on return, so skip polls nobody is looking at.
+    const id = setInterval(() => {
+      if (document.visibilityState === "visible") fetchConditions();
+    }, 300_000);
     return () => clearInterval(id);
   }, [hydrated, fetchConditions]);
 
@@ -115,7 +101,7 @@ export default function Page() {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(`/api/forecast?o=${from.lng},${from.lat}&d=${to.lng},${to.lat}`, {
+      const res = await fetch(`/api/forecast?o=${coordParam(from)}&d=${coordParam(to)}`, {
         cache: "no-store",
       });
       if (!res.ok) throw new Error("forecast");
@@ -134,7 +120,9 @@ export default function Page() {
 
   useEffect(() => {
     if (!hydrated || !route) return;
-    const id = setInterval(() => fetchForecast(route, direction), 120_000);
+    const id = setInterval(() => {
+      if (document.visibilityState === "visible") fetchForecast(route, direction);
+    }, 120_000);
     return () => clearInterval(id);
   }, [route, direction, hydrated, fetchForecast]);
 
@@ -149,7 +137,7 @@ export default function Page() {
     const to = direction === "out" ? route.dest : route.origin;
     let cancelled = false;
     setHistory(null);
-    fetch(`/api/history?o=${from.lng},${from.lat}&d=${to.lng},${to.lat}`)
+    fetch(`/api/history?o=${coordParam(from)}&d=${coordParam(to)}`)
       .then((r) => r.json())
       .then((j) => {
         if (!cancelled) setHistory(j as HistoryData);
@@ -408,10 +396,9 @@ export default function Page() {
             : ""}
         </span>
       </section>
-      <p className="mt-2 text-center text-[11px] leading-relaxed text-slate-400">
-        Live + predicted traffic from Mapbox. Bridge cam by Surf City IGA, incidents from NCDOT DriveNC, tides
-        from NOAA.
-      </p>
+      <div className="mt-6 animate-fade-up">
+        <TipJar />
+      </div>
 
       {offline && (
         <div className="pointer-events-none fixed inset-x-0 bottom-5 z-40 flex justify-center">

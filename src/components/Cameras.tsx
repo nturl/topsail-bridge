@@ -7,8 +7,11 @@ const ISLAND_HLS = "https://www.surfchex.com/hls/sciga/index.m3u8";
 const PLACEHOLDER_BYTES = 15136;
 
 const TABS = [
-  { key: "island", label: "Island roundabout", caption: "Live: Surf City roundabout, island side." },
-  { key: "mainland", label: "Mainland NC-210", caption: "NC-210 approach on the mainland, via NCDOT." },
+  { key: "island", label: "Island", caption: "Live: Surf City roundabout, island side." },
+  { key: "mainland", label: "NC-210", caption: "NC-210 approach on the mainland, via NCDOT." },
+  { key: "us17", label: "US-17", caption: "US-17 at Scotts Hill — the approach from Wilmington, via NCDOT." },
+  { key: "porters", label: "Porters Neck", caption: "US-17 (Market St) at Porters Neck — where Wilmington-side backups start, via DriveNC." },
+  { key: "i40", label: "I-40", caption: "I-40 Exit 408 at NC-210 — the approach from Raleigh, via NCDOT." },
 ] as const;
 type CamKey = (typeof TABS)[number]["key"];
 
@@ -20,6 +23,21 @@ const NCDOT: Record<Exclude<CamKey, "island">, { id: string; alt: string; offlin
     id: "5400",
     alt: "NC-210 mainland approach to the Surf City bridge",
     offlineSubtitle: "NC-210 mainland feed",
+  },
+  us17: {
+    id: "6043",
+    alt: "US-17 at Scotts Hill, the approach to Topsail Island from Wilmington",
+    offlineSubtitle: "US-17 Scotts Hill feed",
+  },
+  porters: {
+    id: "4781",
+    alt: "US-17 Market Street at Porters Neck, where Wilmington-side congestion begins",
+    offlineSubtitle: "US-17 Porters Neck feed",
+  },
+  i40: {
+    id: "6116",
+    alt: "I-40 Exit 408 at NC-210, the approach to Topsail Island from Raleigh",
+    offlineSubtitle: "I-40 at NC-210 feed",
   },
 };
 
@@ -208,7 +226,9 @@ function NcdotSnapshot({ cam }: { cam: (typeof NCDOT)[Exclude<CamKey, "island">]
       }
     };
     load();
-    const id = setInterval(load, 30_000);
+    const id = setInterval(() => {
+      if (document.visibilityState === "visible") load();
+    }, 30_000);
     return () => {
       alive = false;
       clearInterval(id);
@@ -249,7 +269,7 @@ export function Cameras() {
 
   return (
     <div>
-      <div className="mb-3 inline-flex rounded-full bg-slate-100 p-0.5 text-xs font-medium dark:bg-slate-800">
+      <div className="mb-3 inline-flex max-w-full overflow-x-auto rounded-full bg-slate-100 p-0.5 text-xs font-medium dark:bg-slate-800">
         {TABS.map((t) => (
           <button key={t.key} onClick={() => setView(t.key)} className={`${tab} ${view === t.key ? active : idle}`}>
             {t.label}

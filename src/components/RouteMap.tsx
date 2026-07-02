@@ -2,10 +2,13 @@
 
 import { useEffect, useState } from "react";
 import type { LngLat } from "@/lib/types";
+import { coordParam } from "@/lib/geo";
 
 // Image is served by /api/staticmap so the Mapbox token stays server-side.
-// The route is drawn with live congestion overlays; refresh on the same
-// ~2 minute rhythm as the forecast.
+// The map is the illustration — a ~10 minute refresh is plenty, and hidden
+// tabs don't refresh at all (they catch up the moment they're visible again).
+const MAP_WINDOW_MS = 600_000;
+
 export function RouteMap({ origin, dest }: { origin: LngLat; dest: LngLat }) {
   const [dark, setDark] = useState(false);
   const [tick, setTick] = useState(0);
@@ -13,9 +16,19 @@ export function RouteMap({ origin, dest }: { origin: LngLat; dest: LngLat }) {
 
   useEffect(() => {
     setDark(!!window.matchMedia?.("(prefers-color-scheme: dark)").matches);
-    setTick(Math.floor(Date.now() / 120_000));
-    const id = setInterval(() => setTick(Math.floor(Date.now() / 120_000)), 60_000);
-    return () => clearInterval(id);
+    const update = () => setTick(Math.floor(Date.now() / MAP_WINDOW_MS));
+    update();
+    const id = setInterval(() => {
+      if (document.visibilityState === "visible") update();
+    }, 60_000);
+    const onVisible = () => {
+      if (document.visibilityState === "visible") update();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      clearInterval(id);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
   }, []);
 
   useEffect(() => {
@@ -27,7 +40,7 @@ export function RouteMap({ origin, dest }: { origin: LngLat; dest: LngLat }) {
     );
   }, [origin, dest]);
 
-  const src = `/api/staticmap?o=${origin.lng},${origin.lat}&d=${dest.lng},${dest.lat}${dark ? "&dark=1" : ""}${
+  const src = `/api/staticmap?o=${coordParam(origin)}&d=${coordParam(dest)}${dark ? "&dark=1" : ""}${
     tick ? `&t=${tick}` : ""
   }`;
 
