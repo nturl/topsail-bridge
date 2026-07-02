@@ -89,9 +89,11 @@ export function Conditions({ data }: { data: ConditionsData | null }) {
                     : "font-medium text-amber-900 dark:text-amber-300"
                 }
               >
+                {inc.when && "Upcoming · "}
                 {inc.type}
                 {inc.roads.length > 0 && ` · ${inc.roads.join(", ")}`}
                 {inc.direction && ` (${inc.direction})`}
+                {inc.when && ` · ${inc.when}`}
               </p>
               {inc.description && (
                 <p

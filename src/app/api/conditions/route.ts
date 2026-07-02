@@ -30,10 +30,87 @@ function labelType(t: string): string {
     specialEvents: "Special event",
     congestion: "Heavy traffic",
     closure: "Closure",
+    closures: "Closure",
     disabledVehicle: "Disabled vehicle",
     weatherCondition: "Weather",
   };
   return map[t] ?? titleCase(t);
+}
+
+// --- DriveNC schedule handling ---------------------------------------------
+// Event records carry epoch StartDate/PlannedEndDate plus RecurrenceSchedules
+// (date range, days of week, time-of-day windows). Season-long records like
+// "Friday concerts on Roland Ave" or overnight-only roadwork are only real
+// for a few hours a week — without honoring the schedule they sit in the
+// alert list around the clock.
+
+type RecurrenceSchedule = {
+  StartDate?: string; // "7/3/2026 8:00:00 AM-04:00:00"
+  EndDate?: string;
+  Times?: Array<{ StartTime?: string; EndTime?: string }>; // "16:00:00-04:00:00"
+  DaysOfWeek?: string[];
+};
+
+const DAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+
+// The trailing "-04:00:00" is a UTC offset. Returns signed seconds, or null.
+function parseOffset(s: string): number | null {
+  const m = s.match(/([+-])(\d{2}):(\d{2})(?::\d{2})?$/);
+  return m ? (Number(m[2]) * 3600 + Number(m[3]) * 60) * (m[1] === "-" ? -1 : 1) : null;
+}
+
+function schedDateEpoch(s?: string): number | null {
+  if (!s) return null;
+  const m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4}) (\d{1,2}):(\d{2}):(\d{2}) (AM|PM)/);
+  if (!m) return null;
+  let h = Number(m[4]) % 12;
+  if (m[7] === "PM") h += 12;
+  const offset = parseOffset(s) ?? -4 * 3600;
+  return Date.UTC(Number(m[3]), Number(m[1]) - 1, Number(m[2]), h, Number(m[5]), Number(m[6])) / 1000 - offset;
+}
+
+function hmsSeconds(s?: string): number | null {
+  const m = s?.match(/^(\d{2}):(\d{2}):(\d{2})/);
+  return m ? Number(m[1]) * 3600 + Number(m[2]) * 60 + Number(m[3]) : null;
+}
+
+function isActiveNow(schedules: RecurrenceSchedule[] | undefined, nowSec: number): boolean {
+  if (!Array.isArray(schedules) || schedules.length === 0) return true;
+  for (const s of schedules) {
+    const from = schedDateEpoch(s.StartDate);
+    const to = schedDateEpoch(s.EndDate);
+    if (from != null && nowSec < from) continue;
+    if (to != null && nowSec > to) continue;
+    // Evaluate day-of-week and time-of-day on the schedule's own clock.
+    const offset = (s.StartDate ? parseOffset(s.StartDate) : null) ?? -4 * 3600;
+    const local = new Date((nowSec + offset) * 1000);
+    if (s.DaysOfWeek?.length && !s.DaysOfWeek.includes(DAY_NAMES[local.getUTCDay()])) continue;
+    if (!s.Times?.length) return true;
+    const sod = local.getUTCHours() * 3600 + local.getUTCMinutes() * 60 + local.getUTCSeconds();
+    for (const t of s.Times) {
+      const a = hmsSeconds(t.StartTime);
+      const b = hmsSeconds(t.EndTime);
+      if (a == null || b == null) return true;
+      if (a <= b ? sod >= a && sod <= b : sod >= a || sod <= b) return true;
+    }
+  }
+  return false;
+}
+
+// "Fri 8:00a – 11:00p" in Eastern time, for labeling upcoming windows.
+function windowLabel(startSec: number, endSec?: number): string {
+  const part = (sec: number, withDay: boolean) => {
+    const d = new Date(sec * 1000);
+    const day = new Intl.DateTimeFormat("en-US", { timeZone: "America/New_York", weekday: "short" }).format(d);
+    const time = new Intl.DateTimeFormat("en-US", { timeZone: "America/New_York", hour: "numeric", minute: "2-digit" })
+      .format(d)
+      .toLowerCase()
+      .replace(/\s?([ap])m/, "$1");
+    return withDay ? `${day} ${time}` : time;
+  };
+  if (!endSec || endSec <= startSec) return part(startSec, true);
+  const sameDay = new Date(startSec * 1000).toDateString() === new Date(endSec * 1000).toDateString();
+  return `${part(startSec, true)} – ${part(endSec, !sameDay)}`;
 }
 
 async function driveNCIncidents(): Promise<Incident[] | null> {
@@ -50,12 +127,24 @@ async function driveNCIncidents(): Promise<Incident[] | null> {
       const lng = Number(e.Longitude);
       if (!Number.isFinite(lat) || !Number.isFinite(lng) || !inBox(lng, lat)) continue;
       if (typeof e.PlannedEndDate === "number" && e.PlannedEndDate > 0 && e.PlannedEndDate < now) continue;
+
+      // Only show what's real right now — plus a labeled heads-up for events
+      // starting within 48h (e.g. a July 4th closure the day before).
+      let when: string | null = null;
+      const started = typeof e.StartDate !== "number" || e.StartDate <= now;
+      if (!started) {
+        if (e.StartDate - now > 48 * 3600) continue;
+        when = windowLabel(e.StartDate, typeof e.PlannedEndDate === "number" ? e.PlannedEndDate : undefined);
+      } else if (!isActiveNow(e.RecurrenceSchedules, now)) {
+        continue;
+      }
+
       const description = String(e.Description ?? "").replace(/\s+/g, " ").trim();
       const roads = e.RoadwayName ? [String(e.RoadwayName)] : [];
       const type = String(e.EventType ?? "event");
       const key = `${roads.join(",")}|${description}`;
       if (seen.has(key)) continue;
-      const severe = type === "accident" || type === "closure" || e.IsFullClosure === true;
+      const severe = type === "accident" || type === "closure" || type === "closures" || e.IsFullClosure === true;
       seen.set(key, {
         id: String(e.ID ?? key),
         type: labelType(type),
@@ -63,9 +152,13 @@ async function driveNCIncidents(): Promise<Incident[] | null> {
         direction: e.DirectionOfTravel ?? null,
         description,
         severe,
+        when,
       });
     }
-    return [...seen.values()].sort((a, b) => Number(!!b.severe) - Number(!!a.severe));
+    // Severe first; among equals, what's happening now before what's upcoming.
+    return [...seen.values()].sort(
+      (a, b) => Number(!!b.severe) - Number(!!a.severe) || Number(!!a.when) - Number(!!b.when),
+    );
   } catch {
     return null;
   }
@@ -88,9 +181,19 @@ async function wzdxIncidents(): Promise<Incident[]> {
     const j = (await r.json()) as { features?: unknown[] };
     const seen = new Map<string, Incident>();
     for (const f of j.features ?? []) {
-      const feat = f as { id?: string; geometry?: Geo; properties?: { core_details?: Record<string, unknown> } };
+      const feat = f as {
+        id?: string;
+        geometry?: Geo;
+        properties?: { core_details?: Record<string, unknown>; start_date?: string; end_date?: string };
+      };
       const pts = coordsOf(feat.geometry ?? {});
       if (!pts.some(([lng, lat]) => inBox(lng, lat))) continue;
+      // WZDx work zones carry ISO start/end dates; skip ended or far-future ones.
+      const nowMs = Date.now();
+      const start = Date.parse(feat.properties?.start_date ?? "");
+      const end = Date.parse(feat.properties?.end_date ?? "");
+      if (Number.isFinite(end) && end < nowMs) continue;
+      if (Number.isFinite(start) && start - nowMs > 48 * 3600 * 1000) continue;
       const cd = feat.properties?.core_details ?? {};
       const description = String(cd.description ?? "").replace(/\s+/g, " ").trim();
       const roads = (cd.road_names as string[]) ?? [];

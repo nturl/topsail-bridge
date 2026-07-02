@@ -34,6 +34,7 @@ export type Incident = {
   direction: string | null;
   description: string;
   severe?: boolean; // accident / full closure -> emphasized
+  when?: string | null; // set for upcoming (not yet active) events: "Fri 8:00a – 11:00p"
 };
 
 export type Weather = { tempF: number; precipIn: number; code: number; windMph: number } | null;
