@@ -11,9 +11,13 @@ const LINKS = [
 export function SiteFooter() {
   return (
     <footer className="mx-auto w-full max-w-5xl px-5 pb-10">
-      <nav className="flex flex-wrap items-center justify-center gap-x-5 gap-y-1 border-t border-slate-200/70 pt-5 text-xs dark:border-white/10">
+      <nav className="flex flex-wrap items-center justify-center gap-2.5 border-t border-slate-200/70 pt-5 dark:border-white/10">
         {LINKS.map((l) => (
-          <Link key={l.href} href={l.href} className="text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200">
+          <Link
+            key={l.href}
+            href={l.href}
+            className="pressable inline-flex items-center rounded-full bg-sky-600 px-4 py-2 text-[13px] font-semibold text-white shadow-sm transition-colors hover:bg-sky-700"
+          >
             {l.label}
           </Link>
         ))}
