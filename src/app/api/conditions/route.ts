@@ -109,7 +109,10 @@ function windowLabel(startSec: number, endSec?: number): string {
     return withDay ? `${day} ${time}` : time;
   };
   if (!endSec || endSec <= startSec) return part(startSec, true);
-  const sameDay = new Date(startSec * 1000).toDateString() === new Date(endSec * 1000).toDateString();
+  // Compare calendar days in Eastern time, not the server's timezone.
+  const dayKey = (sec: number) =>
+    new Intl.DateTimeFormat("en-CA", { timeZone: "America/New_York", dateStyle: "short" }).format(new Date(sec * 1000));
+  const sameDay = dayKey(startSec) === dayKey(endSec);
   return `${part(startSec, true)} – ${part(endSec, !sameDay)}`;
 }
 
