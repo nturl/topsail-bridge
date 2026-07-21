@@ -3,7 +3,7 @@
 import type { LngLat, Place } from "./types";
 import { decodePolyline, encodePolyline } from "./polyline";
 
-const TOKEN = process.env.MAPBOX_TOKEN ?? process.env.NEXT_PUBLIC_MAPBOX_TOKEN ?? "";
+const TOKEN = process.env.MAPBOX_TOKEN ?? "";
 const TZ = "America/New_York";
 const PROXIMITY = "-77.6,34.42"; // bias geocoding toward Topsail
 // Keep results in southeastern NC (Wilmington up to Jacksonville) so a search

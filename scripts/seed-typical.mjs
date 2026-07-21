@@ -5,9 +5,9 @@ import { writeFileSync, mkdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-const TOKEN = process.env.NEXT_PUBLIC_MAPBOX_TOKEN || process.env.MAPBOX_TOKEN;
+const TOKEN = process.env.MAPBOX_TOKEN;
 if (!TOKEN) {
-  console.error("Missing NEXT_PUBLIC_MAPBOX_TOKEN");
+  console.error("Missing MAPBOX_TOKEN");
   process.exit(1);
 }
 
