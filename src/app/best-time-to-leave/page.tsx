@@ -216,7 +216,11 @@ export default function BestTimePage() {
           The bridge itself is no longer the bottleneck. The old Surf City swing bridge — which stopped traffic on
           the hour for boats — was replaced in 2018 by a fixed high-rise span. What is left is simple volume: a
           barrier island with two access points, and most traffic using this one. The pinch points now are the
-          roundabout on the island side and the NC-210/NC-50 junction on the mainland.
+          roundabout on the island side and the NC-210/NC-50 junction on the mainland. Curious about the old bridge?{" "}
+          <Link href="/swing-bridge-history" className="text-sky-700 hover:underline dark:text-sky-400">
+            Read its full history
+          </Link>
+          .
         </p>
         <p className={PROSE}>
           Holiday weeks amplify everything: expect July 4th and Labor Day Saturdays to run past the numbers above,

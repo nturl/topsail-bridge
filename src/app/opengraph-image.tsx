@@ -1,8 +1,11 @@
 import { ImageResponse } from "next/og";
+import { buildForecast } from "@/lib/forecast";
+import { DEFAULT_ORIGIN, DEFAULT_DEST } from "@/lib/places";
 
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
 export const alt = "Topsail Traffic — when to leave Topsail Island";
+export const revalidate = 300;
 
 // The wordmark uses the app's serif (Instrument Serif). Fetched once at build;
 // if Google Fonts is unreachable we fall back to the default sans.
@@ -21,6 +24,14 @@ async function instrumentSerif(): Promise<ArrayBuffer | null> {
 
 export default async function OpengraphImage() {
   const serif = await instrumentSerif();
+
+  let delay: number | null = null;
+  try {
+    const fc = await buildForecast(DEFAULT_ORIGIN, DEFAULT_DEST, 15, 15);
+    if (fc.now != null && fc.freeFlow != null) delay = Math.max(0, fc.now - fc.freeFlow);
+  } catch {
+    delay = null;
+  }
 
   return new ImageResponse(
     (
@@ -73,28 +84,45 @@ export default async function OpengraphImage() {
           When to leave (and return to) Topsail Island
         </div>
 
-        <div style={{ display: "flex", position: "relative", marginTop: 44, width: 280, height: 12 }}>
+        {delay == null ? (
+          <div style={{ display: "flex", position: "relative", marginTop: 44, width: 280, height: 12 }}>
+            <div
+              style={{
+                width: "100%",
+                height: "100%",
+                borderRadius: 999,
+                background: "linear-gradient(90deg,#16a34a,#eab308,#ef4444)",
+              }}
+            />
+            <div
+              style={{
+                position: "absolute",
+                left: 50,
+                top: -5,
+                width: 22,
+                height: 22,
+                borderRadius: 999,
+                background: "#ffffff",
+                border: "4px solid #0f172a",
+              }}
+            />
+          </div>
+        ) : (
           <div
             style={{
-              width: "100%",
-              height: "100%",
+              display: "flex",
+              marginTop: 44,
               borderRadius: 999,
-              background: "linear-gradient(90deg,#16a34a,#eab308,#ef4444)",
+              background: delay <= 3 ? "#10b981" : delay <= 8 ? "#f59e0b" : "#f43f5e",
+              color: "#ffffff",
+              fontWeight: 700,
+              fontSize: 36,
+              padding: "14px 32px",
             }}
-          />
-          <div
-            style={{
-              position: "absolute",
-              left: 50,
-              top: -5,
-              width: 22,
-              height: 22,
-              borderRadius: 999,
-              background: "#ffffff",
-              border: "4px solid #0f172a",
-            }}
-          />
-        </div>
+          >
+            {delay === 0 ? "No delay right now" : `+${delay} min right now`}
+          </div>
+        )}
       </div>
     ),
     {

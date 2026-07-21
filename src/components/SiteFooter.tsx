@@ -4,6 +4,7 @@ const LINKS = [
   { href: "/", label: "Live drive times" },
   { href: "/cams", label: "Traffic cams" },
   { href: "/best-time-to-leave", label: "Best time to leave" },
+  { href: "/swing-bridge-history", label: "Swing bridge history" },
 ];
 
 // Server-rendered on every page: gives each page crawlable internal links and
