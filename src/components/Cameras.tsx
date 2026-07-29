@@ -1,10 +1,25 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import type Hls from "hls.js";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 const ISLAND_HLS = "https://www.surfchex.com/hls/sciga/index.m3u8";
 // NCDOT serves this exact PNG (constant size) when a camera is temporarily down.
 const PLACEHOLDER_BYTES = 15136;
+
+// This feed's usual failure is silent, not loud: the player stays "playing"
+// while the picture freezes, or it drifts minutes behind the live edge and
+// replays buffered frames under a LIVE badge. hls.js reports no error for
+// either. Surfchex's own player polls for real playback progress instead of
+// trusting events; these thresholds mirror theirs.
+const STARTUP_TIMEOUT_MS = 20_000;
+const WATCHDOG_INTERVAL_MS = 3_000;
+const STALL_HEAL_MS = 6_000; // no progress this long -> nudge the loader
+const STALL_REBUILD_MS = 30_000; // still frozen -> tear the player down
+const HEAL_COOLDOWN_MS = 15_000;
+const REBUILD_COOLDOWN_MS = 45_000;
+const MAX_DRIFT_S = 20; // this far behind the live edge -> seek forward
+const RETRY_BACKOFF_MS = [8_000, 20_000, 60_000];
 
 const TABS = [
   { key: "island", label: "Island", caption: "Live: Surf City roundabout, island side." },
@@ -101,63 +116,185 @@ function CamPlaceholder({
 // Chromium reports a misleading canPlayType("maybe") it can't actually decode.
 function IslandVideo() {
   const ref = useRef<HTMLVideoElement>(null);
-  const [failed, setFailed] = useState(false);
-  const [paused, setPaused] = useState(true);
+  // "starting" until frames actually move; "live" only while they keep moving.
+  const [status, setStatus] = useState<"starting" | "live" | "offline">("starting");
+  const [paused, setPaused] = useState(false);
   const [attempt, setAttempt] = useState(0);
 
-  // The feed comes and goes at Surfchex's end; recheck every few minutes so
-  // the view recovers mid-session instead of waiting for a reload.
+  const hls = useRef<Hls | null>(null);
+  const statusRef = useRef(status);
+  const lastTime = useRef(0);
+  const lastProgressAt = useRef(0);
+  const lastHealAt = useRef(0);
+  const lastRebuildAt = useRef(0);
+  const retries = useRef(0);
+
   useEffect(() => {
-    if (!failed) return;
-    const id = setTimeout(() => {
-      setFailed(false);
-      setAttempt((a) => a + 1);
-    }, 180_000);
-    return () => clearTimeout(id);
-  }, [failed]);
+    statusRef.current = status;
+  }, [status]);
+
+  const rebuild = useCallback(() => {
+    lastRebuildAt.current = Date.now();
+    setAttempt((a) => a + 1);
+  }, []);
 
   useEffect(() => {
     const video = ref.current;
     if (!video) return;
-    let hls: { destroy: () => void } | undefined;
-    const tryPlay = () => video.play().catch(() => setPaused(true));
+    let cancelled = false;
+    let started = false;
+    let inst: Hls | null = null;
+
+    const tryPlay = () => void video.play().catch(() => setPaused(true));
+    const fail = () => {
+      if (!cancelled) setStatus("offline");
+    };
+
+    // A feed that never produces a frame looks identical to one still loading.
+    const startupTimer = setTimeout(() => {
+      if (!started) fail();
+    }, STARTUP_TIMEOUT_MS);
+
+    // "live" means the feed is reachable and decoding, not that it's playing:
+    // a browser blocking muted autoplay is a play-button case, not an outage.
+    const onReady = () => {
+      started = true;
+      retries.current = 0;
+      lastTime.current = video.currentTime;
+      lastProgressAt.current = Date.now();
+      setStatus("live");
+    };
+    const onPlaying = () => {
+      onReady();
+      setPaused(false);
+    };
+    const onPause = () => setPaused(true);
+    video.addEventListener("loadeddata", onReady);
+    video.addEventListener("playing", onPlaying);
+    video.addEventListener("pause", onPause);
 
     import("hls.js")
-      .then(({ default: Hls }) => {
-        if (Hls.isSupported()) {
-          const inst = new Hls({ liveSyncDurationCount: 3 });
-          hls = inst;
+      .then(({ default: HlsCtor }) => {
+        if (cancelled) return;
+        if (HlsCtor.isSupported()) {
+          inst = new HlsCtor({
+            liveDurationInfinity: true,
+            maxMaxBufferLength: 30,
+            manifestLoadingTimeOut: 10_000,
+            manifestLoadingMaxRetry: 4,
+            levelLoadingTimeOut: 10_000,
+            levelLoadingMaxRetry: 6,
+            fragLoadingMaxRetry: 6,
+          });
+          hls.current = inst;
           inst.loadSource(ISLAND_HLS);
           inst.attachMedia(video);
-          inst.on(Hls.Events.MANIFEST_PARSED, tryPlay);
-          inst.on(Hls.Events.ERROR, (_e, d) => {
-            if (d?.fatal) setFailed(true);
+          inst.on(HlsCtor.Events.MANIFEST_PARSED, tryPlay);
+          inst.on(HlsCtor.Events.ERROR, (_e, d) => {
+            if (!d.fatal) return;
+            // Most fatal network/media errors recover in place. Only a dead
+            // manifest means the feed itself is gone.
+            const deadManifest =
+              d.details === HlsCtor.ErrorDetails.MANIFEST_LOAD_ERROR ||
+              d.details === HlsCtor.ErrorDetails.MANIFEST_LOAD_TIMEOUT;
+            if (d.type === HlsCtor.ErrorTypes.NETWORK_ERROR && !deadManifest) inst?.startLoad();
+            else if (d.type === HlsCtor.ErrorTypes.MEDIA_ERROR) inst?.recoverMediaError();
+            else fail();
           });
         } else if (video.canPlayType("application/vnd.apple.mpegurl")) {
           video.src = ISLAND_HLS;
           video.addEventListener("loadedmetadata", tryPlay, { once: true });
+          video.onerror = fail;
         } else {
-          setFailed(true);
+          fail();
         }
       })
-      .catch(() => setFailed(true));
+      .catch(fail);
 
-    const onPlay = () => setPaused(false);
-    const onPause = () => setPaused(true);
-    video.addEventListener("play", onPlay);
-    video.addEventListener("pause", onPause);
     return () => {
-      video.removeEventListener("play", onPlay);
+      cancelled = true;
+      clearTimeout(startupTimer);
+      video.removeEventListener("loadeddata", onReady);
+      video.removeEventListener("playing", onPlaying);
       video.removeEventListener("pause", onPause);
-      hls?.destroy();
+      video.onerror = null;
+      inst?.destroy();
+      hls.current = null;
     };
   }, [attempt]);
 
-  if (failed) {
+  // Watchdog: poll for real progress, since a frozen or stale feed fires no events.
+  useEffect(() => {
+    const video = ref.current;
+    if (!video) return;
+
+    const seekToLiveEdge = () => {
+      const s = video.seekable;
+      if (!s.length) return;
+      const edge = s.end(s.length - 1);
+      if (edge - video.currentTime > MAX_DRIFT_S) video.currentTime = Math.max(edge - 2, 0);
+    };
+
+    const heal = () => {
+      lastHealAt.current = Date.now();
+      hls.current?.startLoad();
+      seekToLiveEdge();
+      void video.play().catch(() => setPaused(true));
+    };
+
+    const tick = () => {
+      if (document.visibilityState !== "visible") return;
+      if (statusRef.current !== "live" || video.paused) return;
+      const now = Date.now();
+      if (Math.abs(video.currentTime - lastTime.current) > 0.25) {
+        lastTime.current = video.currentTime;
+        lastProgressAt.current = now;
+        seekToLiveEdge();
+        return;
+      }
+      const frozenFor = now - lastProgressAt.current;
+      if (frozenFor > STALL_REBUILD_MS && now - lastRebuildAt.current > REBUILD_COOLDOWN_MS) rebuild();
+      else if (frozenFor > STALL_HEAL_MS && now - lastHealAt.current > HEAL_COOLDOWN_MS) heal();
+    };
+
+    // Backgrounded tabs get throttled and come back arbitrarily far behind.
+    const onReturn = () => {
+      if (document.visibilityState !== "visible" || statusRef.current !== "live") return;
+      lastTime.current = video.currentTime;
+      lastProgressAt.current = Date.now();
+      if (video.error || video.readyState === 0) rebuild();
+      else heal();
+    };
+
+    const id = setInterval(tick, WATCHDOG_INTERVAL_MS);
+    document.addEventListener("visibilitychange", onReturn);
+    window.addEventListener("pageshow", onReturn);
+    return () => {
+      clearInterval(id);
+      document.removeEventListener("visibilitychange", onReturn);
+      window.removeEventListener("pageshow", onReturn);
+    };
+  }, [rebuild]);
+
+  // Once down, retry on a widening backoff rather than a flat interval.
+  useEffect(() => {
+    if (status !== "offline") return;
+    const id = setTimeout(
+      () => {
+        retries.current += 1;
+        setStatus("starting");
+        setAttempt((a) => a + 1);
+      },
+      RETRY_BACKOFF_MS[Math.min(retries.current, RETRY_BACKOFF_MS.length - 1)],
+    );
+    return () => clearTimeout(id);
+  }, [status]);
+
+  if (status === "offline") {
     return (
       <CamPlaceholder
         title="Camera is down right now"
-        subtitle="Rechecking automatically every few minutes"
+        subtitle="Rechecking automatically"
         href="https://www.surfchex.com/cams/surf-city-bridge/"
         hrefLabel="Open live cam"
       />
@@ -171,15 +308,23 @@ function IslandVideo() {
         muted
         autoPlay
         playsInline
-        loop
         className="aspect-video w-full object-cover"
         onClick={() => ref.current?.play()}
       />
       <span className="absolute left-2 top-2 flex items-center gap-1 rounded-full bg-black/55 px-2 py-0.5 text-[10px] font-medium text-white backdrop-blur">
-        <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-rose-500" />
-        LIVE
+        {status === "live" && !paused ? (
+          <>
+            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-rose-500" />
+            LIVE
+          </>
+        ) : (
+          <>
+            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-slate-400" />
+            CONNECTING
+          </>
+        )}
       </span>
-      {paused && (
+      {paused && status === "live" && (
         <button
           type="button"
           onClick={() => ref.current?.play()}
