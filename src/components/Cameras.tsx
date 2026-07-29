@@ -149,7 +149,11 @@ function IslandVideo() {
     const fail = () => {
       if (!cancelled) setStatus("offline");
     };
+    // Terminal: the promo slate buffers like any other video, so "loadeddata"
+    // lands after we've already identified it and would flip us back to live.
+    let isBlocked = false;
     const blocked = () => {
+      isBlocked = true;
       if (!cancelled) setStatus("blocked");
     };
 
@@ -161,6 +165,7 @@ function IslandVideo() {
     // "live" means the feed is reachable and decoding, not that it's playing:
     // a browser blocking muted autoplay is a play-button case, not an outage.
     const onReady = () => {
+      if (isBlocked) return;
       started = true;
       retries.current = 0;
       lastTime.current = video.currentTime;
