@@ -117,7 +117,7 @@ function CamPlaceholder({
 function IslandVideo() {
   const ref = useRef<HTMLVideoElement>(null);
   // "starting" until frames actually move; "live" only while they keep moving.
-  const [status, setStatus] = useState<"starting" | "live" | "offline">("starting");
+  const [status, setStatus] = useState<"starting" | "live" | "offline" | "blocked">("starting");
   const [paused, setPaused] = useState(false);
   const [attempt, setAttempt] = useState(0);
 
@@ -148,6 +148,9 @@ function IslandVideo() {
     const tryPlay = () => void video.play().catch(() => setPaused(true));
     const fail = () => {
       if (!cancelled) setStatus("offline");
+    };
+    const blocked = () => {
+      if (!cancelled) setStatus("blocked");
     };
 
     // A feed that never produces a frame looks identical to one still loading.
@@ -190,6 +193,12 @@ function IslandVideo() {
           inst.loadSource(ISLAND_HLS);
           inst.attachMedia(video);
           inst.on(HlsCtor.Events.MANIFEST_PARSED, tryPlay);
+          // Surfchex hotlink-protects this feed by referer: off-site players get
+          // a finite VOD loop of their promo slate instead of the camera. It
+          // decodes perfectly, so only the playlist shape gives it away.
+          inst.on(HlsCtor.Events.LEVEL_LOADED, (_e, d) => {
+            if (!d.details.live) blocked();
+          });
           inst.on(HlsCtor.Events.ERROR, (_e, d) => {
             if (!d.fatal) return;
             // Most fatal network/media errors recover in place. Only a dead
@@ -204,6 +213,10 @@ function IslandVideo() {
         } else if (video.canPlayType("application/vnd.apple.mpegurl")) {
           video.src = ISLAND_HLS;
           video.addEventListener("loadedmetadata", tryPlay, { once: true });
+          // Same promo-slate check for native HLS: a live feed has no duration.
+          video.addEventListener("durationchange", () => {
+            if (Number.isFinite(video.duration)) blocked();
+          });
           video.onerror = fail;
         } else {
           fail();
@@ -289,6 +302,19 @@ function IslandVideo() {
     );
     return () => clearTimeout(id);
   }, [status]);
+
+  // Not an outage: Surfchex serves their promo slate to off-site players, so
+  // retrying won't help. Send people to the source instead of looping their ad.
+  if (status === "blocked") {
+    return (
+      <CamPlaceholder
+        title="This cam only plays on Surfchex"
+        subtitle="They host the Surf City bridge camera and don't allow it off their site."
+        href="https://www.surfchex.com/cams/surf-city-bridge/"
+        hrefLabel="Watch it on Surfchex"
+      />
+    );
+  }
 
   if (status === "offline") {
     return (
