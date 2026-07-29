@@ -2,8 +2,8 @@
 
 import type Hls from "hls.js";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { ISLAND_CAMERA_MODE, ISLAND_HLS } from "@/lib/camera-config";
 
-const ISLAND_HLS = "https://www.surfchex.com/hls/sciga/index.m3u8";
 // NCDOT serves this exact PNG (constant size) when a camera is temporarily down.
 const PLACEHOLDER_BYTES = 15136;
 
@@ -22,7 +22,7 @@ const MAX_DRIFT_S = 20; // this far behind the live edge -> seek forward
 const RETRY_BACKOFF_MS = [8_000, 20_000, 60_000];
 
 const TABS = [
-  { key: "island", label: "Island", caption: "Live: Surf City roundabout, island side." },
+  { key: "island", label: "Island", caption: "Surf City roundabout, island side, hosted by Surfchex." },
   { key: "mainland", label: "NC-210", caption: "NC-210 approach on the mainland, via NCDOT." },
   { key: "us17", label: "US-17", caption: "US-17 at Scotts Hill — the approach from Wilmington, via NCDOT." },
   { key: "porters", label: "Porters Neck", caption: "US-17 (Market St) at Porters Neck — where Wilmington-side backups start, via DriveNC." },
@@ -111,10 +111,21 @@ function CamPlaceholder({
   );
 }
 
+function SurfchexLink() {
+  return (
+    <CamPlaceholder
+      title="Live Surf City Bridge camera"
+      subtitle="Hosted by Surf City IGA via Surfchex"
+      href="https://www.surfchex.com/cams/surf-city-bridge/"
+      hrefLabel="Open live camera on Surfchex"
+    />
+  );
+}
+
 // Island roundabout: live HLS video. Prefer hls.js wherever it's supported
 // (Chrome/Edge/Firefox/Dia); only fall back to native HLS on Safari/iOS, since
 // Chromium reports a misleading canPlayType("maybe") it can't actually decode.
-function IslandVideo() {
+function IslandVideo({ src, isSurfchex }: { src: string; isSurfchex: boolean }) {
   const ref = useRef<HTMLVideoElement>(null);
   // "starting" until frames actually move; "live" only while they keep moving.
   const [status, setStatus] = useState<"starting" | "live" | "offline" | "blocked">("starting");
@@ -195,14 +206,17 @@ function IslandVideo() {
             fragLoadingMaxRetry: 6,
           });
           hls.current = inst;
-          inst.loadSource(ISLAND_HLS);
+          inst.loadSource(src);
           inst.attachMedia(video);
           inst.on(HlsCtor.Events.MANIFEST_PARSED, tryPlay);
           // Surfchex hotlink-protects this feed by referer: off-site players get
           // a finite VOD loop of their promo slate instead of the camera. It
           // decodes perfectly, so only the playlist shape gives it away.
           inst.on(HlsCtor.Events.LEVEL_LOADED, (_e, d) => {
-            if (!d.details.live) blocked();
+            if (!d.details.live) {
+              if (isSurfchex) blocked();
+              else fail();
+            }
           });
           inst.on(HlsCtor.Events.ERROR, (_e, d) => {
             if (!d.fatal) return;
@@ -216,11 +230,14 @@ function IslandVideo() {
             else fail();
           });
         } else if (video.canPlayType("application/vnd.apple.mpegurl")) {
-          video.src = ISLAND_HLS;
+          video.src = src;
           video.addEventListener("loadedmetadata", tryPlay, { once: true });
           // Same promo-slate check for native HLS: a live feed has no duration.
           video.addEventListener("durationchange", () => {
-            if (Number.isFinite(video.duration)) blocked();
+            if (Number.isFinite(video.duration)) {
+              if (isSurfchex) blocked();
+              else fail();
+            }
           });
           video.onerror = fail;
         } else {
@@ -239,7 +256,7 @@ function IslandVideo() {
       inst?.destroy();
       hls.current = null;
     };
-  }, [attempt]);
+  }, [attempt, isSurfchex, src]);
 
   // Watchdog: poll for real progress, since a frozen or stale feed fires no events.
   useEffect(() => {
@@ -311,14 +328,7 @@ function IslandVideo() {
   // Not an outage: Surfchex serves their promo slate to off-site players, so
   // retrying won't help. Send people to the source instead of looping their ad.
   if (status === "blocked") {
-    return (
-      <CamPlaceholder
-        title="This cam only plays on Surfchex"
-        subtitle="They host the Surf City bridge camera and don't allow it off their site."
-        href="https://www.surfchex.com/cams/surf-city-bridge/"
-        hrefLabel="Watch it on Surfchex"
-      />
-    );
+    return <SurfchexLink />;
   }
 
   if (status === "offline") {
@@ -326,8 +336,8 @@ function IslandVideo() {
       <CamPlaceholder
         title="Camera is down right now"
         subtitle="Rechecking automatically"
-        href="https://www.surfchex.com/cams/surf-city-bridge/"
-        hrefLabel="Open live cam"
+        href={isSurfchex ? "https://www.surfchex.com/cams/surf-city-bridge/" : undefined}
+        hrefLabel={isSurfchex ? "Open live cam" : undefined}
       />
     );
   }
@@ -437,25 +447,49 @@ function NcdotSnapshot({ cam }: { cam: (typeof NCDOT)[Exclude<CamKey, "island">]
 }
 
 export function Cameras() {
-  const [view, setView] = useState<CamKey>("island");
+  // Lead with the closest camera that is always available on-site. The island
+  // tab links out unless an owned/authorized feed is configured.
+  const [view, setView] = useState<CamKey>("mainland");
   const tab = "pressable shrink-0 rounded-full px-3 py-1 transition-colors";
   const active = "bg-white text-slate-900 shadow-sm dark:bg-slate-700 dark:text-white";
   const idle = "text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200";
   const current = TABS.find((t) => t.key === view) ?? TABS[0];
+  const islandEmbedEnabled = ISLAND_CAMERA_MODE !== "link";
+  const islandSourceIsSurfchex = ISLAND_CAMERA_MODE === "surfchex";
+  const caption =
+    view === "island" && ISLAND_CAMERA_MODE === "authorized" ? "Live authorized island camera." : current.caption;
 
   return (
     <div>
-      <div className="mb-3 inline-flex max-w-full overflow-x-auto rounded-full bg-slate-100 p-0.5 text-xs font-medium dark:bg-slate-800">
+      <div
+        role="group"
+        aria-label="Traffic camera view"
+        className="mb-3 inline-flex max-w-full overflow-x-auto rounded-full bg-slate-100 p-0.5 text-xs font-medium dark:bg-slate-800"
+      >
         {TABS.map((t) => (
-          <button key={t.key} onClick={() => setView(t.key)} className={`${tab} ${view === t.key ? active : idle}`}>
+          <button
+            key={t.key}
+            type="button"
+            aria-pressed={view === t.key}
+            onClick={() => setView(t.key)}
+            className={`${tab} ${view === t.key ? active : idle}`}
+          >
             {t.label}
           </button>
         ))}
       </div>
 
-      {view === "island" ? <IslandVideo /> : <NcdotSnapshot cam={NCDOT[view]} />}
+      {view === "island" ? (
+        islandEmbedEnabled ? (
+          <IslandVideo src={ISLAND_HLS} isSurfchex={islandSourceIsSurfchex} />
+        ) : (
+          <SurfchexLink />
+        )
+      ) : (
+        <NcdotSnapshot cam={NCDOT[view]} />
+      )}
 
-      <p className="mt-2 text-xs text-slate-400">{current.caption}</p>
+      <p className="mt-2 text-xs text-slate-400">{caption}</p>
     </div>
   );
 }

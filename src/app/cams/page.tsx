@@ -3,15 +3,21 @@ import Link from "next/link";
 import { Cameras } from "@/components/Cameras";
 import { PageHeader } from "@/components/PageHeader";
 import { TipJar } from "@/components/TipJar";
+import { ISLAND_CAMERA_MODE } from "@/lib/camera-config";
+
+const ISLAND_CAM_EMBEDDED = ISLAND_CAMERA_MODE !== "link";
 
 export const metadata: Metadata = {
   title: "Surf City Bridge Cam & Topsail Island Traffic Cameras — Live",
-  description:
-    "Every live traffic camera between you and Topsail Island: the Surf City bridge roundabout cam plus NCDOT views of NC-210, US-17 at Scotts Hill and Porters Neck, and I-40 at Exit 408. Free, no sign-up.",
+  description: ISLAND_CAM_EMBEDDED
+    ? "Live island-side and NCDOT traffic cameras on the routes to Topsail Island. Free, no sign-up."
+    : "Live NCDOT traffic cameras on the routes to Topsail Island, plus a direct link to Surfchex's Surf City bridge roundabout cam. Free, no sign-up.",
   alternates: { canonical: "/cams" },
   openGraph: {
     title: "Topsail Island traffic cams — live",
-    description: "The Surf City bridge cam and every NCDOT camera on the way to Topsail Island, in one place.",
+    description: ISLAND_CAM_EMBEDDED
+      ? "Live island-side and NCDOT cameras on the way to Topsail Island."
+      : "Live NCDOT cameras on the way to Topsail Island, plus the Surf City bridge cam on Surfchex.",
     url: "/cams",
   },
 };
@@ -25,7 +31,9 @@ const PROSE = "mt-2 text-[15px] leading-relaxed text-slate-600 dark:text-slate-3
 const CAM_NOTES = [
   {
     name: "Island roundabout (Surf City bridge cam)",
-    body: "Live video of the roundabout on the island side of the Surf City bridge, hosted by Surf City IGA via Surfchex. If traffic is stacking up getting on or off the island, you see it here first.",
+    body: ISLAND_CAM_EMBEDDED
+      ? "The Island tab shows configured live video from the island side of the Surf City bridge."
+      : "Surfchex hosts live video of the roundabout on the island side of the Surf City bridge. Their player only runs on Surfchex, so the Island tab links directly to it.",
   },
   {
     name: "NC-210 at JH Batts Rd",
@@ -76,7 +84,9 @@ const MORE_CAMS = [
 const FAQ = [
   {
     q: "Is there a live camera of the Surf City bridge?",
-    a: "Yes. The island roundabout camera above shows live video from the island side of the Surf City bridge, courtesy of Surf City IGA via Surfchex, and NCDOT's NC-210 camera covers the mainland approach.",
+    a: ISLAND_CAM_EMBEDDED
+      ? "Yes. The Island tab shows the configured live camera on the island side of the bridge, and the NC-210 tab shows NCDOT's camera on the mainland approach."
+      : "Yes. The Island tab links to Surfchex's live roundabout camera on the island side of the bridge. The NC-210 tab shows NCDOT's camera on the mainland approach without leaving this page.",
   },
   {
     q: "How can I check Topsail traffic before I leave home?",
@@ -97,7 +107,11 @@ export default function CamsPage() {
     <main className="mx-auto w-full max-w-3xl px-5 py-8 md:py-12">
       <PageHeader
         title="Topsail Island traffic cams"
-        lede="Every live camera between you and the beach — the Surf City bridge roundabout plus NCDOT's views of NC-210, US-17, and I-40 — in one place, updating while you pack the car."
+        lede={
+          ISLAND_CAM_EMBEDDED
+            ? "Live island-side and NCDOT views of NC-210, US-17, and I-40 in one place."
+            : "Live NCDOT views of NC-210, US-17, and I-40 in one place, plus a direct link to Surfchex's Surf City bridge roundabout cam."
+        }
       />
 
       <section className={`${CARD} animate-fade-up`}>
