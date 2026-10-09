@@ -102,7 +102,7 @@ const FAQ = [
   },
   {
     q: "How often do the NCDOT cameras update?",
-    a: "NCDOT serves a fresh snapshot roughly every minute, and this page refreshes them automatically about every 30 seconds while it is open. Each picture shows the time it was fetched; tap one to see it full screen.",
+    a: "NCDOT serves a fresh snapshot roughly every minute, and this page refreshes them automatically about every 30 seconds while it is open. Each picture shows the time it was fetched; tap one to see it full screen, or tap Watch live for NCDOT's live video.",
   },
 ];
 
@@ -142,8 +142,9 @@ export default function CamsPage() {
           <a href="https://drivenc.gov" target="_blank" rel="noreferrer" className="text-sky-700 hover:underline dark:text-sky-400">
             DriveNC.gov
           </a>
-          . Snapshots only: for NCDOT&apos;s live video, open the camera on DriveNC. There are no NCDOT cameras on the
-          island itself, at the North Topsail bridge, or in Holly Ridge or Sneads Ferry.
+          . The pictures are snapshots that refresh on their own; for moving video, tap Watch live on any camera to
+          open NCDOT&apos;s live DriveNC map right here. There are no NCDOT cameras on the island itself, at the North
+          Topsail bridge, or in Holly Ridge or Sneads Ferry.
         </p>
       </section>
 

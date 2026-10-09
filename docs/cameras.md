@@ -30,14 +30,27 @@ otherwise. Keep the DriveNC attribution and revisit permission before adding
 advertising or other commercial use. See the
 [NCDOT terms of use](https://www.ncdot.gov/about-us/how-we-operate/policy-process/Pages/terms-use.aspx).
 
-Live video: DriveNC streams are HLS, and most require auth. A few (6141 and the
-NC-417 cams) are marked open, but nothing NCDOT publishes grants embedding
-them, so the app shows snapshots and links to DriveNC for video. Ask NCDOT in
-writing before embedding any stream.
+Live video: "Watch live" on each camera opens NCDOT's own embeddable DriveNC
+map (`liveMapUrl` in `src/lib/cams.ts`, from drivenc.gov/map/embeddedmapsetup),
+centered on that camera with only the cameras layer. Tapping the pin, then Show
+Video, plays NCDOT's live stream inside DriveNC's frame, including the
+auth-gated cams (verified 2026-10-09 on 6157). The frame loads only on tap
+because it brings Google Maps and NCDOT's Google Analytics. Never pull the HLS
+streams directly: DriveNC gates most of them and nothing grants that use.
 
 DriveNC's robots.txt disallows `/List/GetData/` and `/map/map*/`. The app only
 fetches `/map/Cctv/<id>` snapshots; don't build on the list endpoints. The
 sanctioned machine route is the DriveNC developer API (key required).
+
+## Other live video near the island
+
+Checked 2026-10-09 (YouTube, Twitch, Facebook, IPCamLive, HDOnTap, EarthCam,
+Windy, WeatherSTEM, SECOORA, TV station cams, local businesses): every
+business cam on the island runs through Surfchex and was offline or showing
+the promo loop. The one live feed found is The Breezeway Restaurant & Motel's
+"Pier Cam" in Topsail Beach (sound side, dock and patio, not traffic), an
+Angelcam player at `https://v.angelcam.com/iframe?v=1erobzbvl8` that frames
+fine. Embed only after the owner says yes.
 
 ## Island camera: default mode
 

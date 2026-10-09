@@ -42,24 +42,31 @@ growth, followed by this build. What shipped and what still needs the owner.
   allowed, focus rings, reduced motion, contrast; copy fixes (no overclaims,
   no "every 30 minutes"); `npm run poll` fixed; `npm run smoke`.
 
-## Needs the owner
+## Needs the owner (everything else is built and waiting)
 
-1. **Poll cadence for real:** the 15-minute schedule helps, but GitHub may still
-   drop runs. The robust fix is an external scheduler calling the
-   `workflow_dispatch` endpoint with a fine-grained PAT (Actions: write on this
-   repo only).
-2. **Vercel firewall rate limit** on `/api/forecast`, `/api/history`,
-   `/api/geocode`, `/api/staticmap` (~30 req/min per IP). Dashboard setting.
-3. **NCDOT:** written OK for snapshot reuse (and any live video), plus a DriveNC
-   developer key, before any sponsor placement.
-4. **Surfchex:** send docs/outreach.md Email 1 via surfchex.com/contact for an
-   embed or a live (non-promo) stream URL.
-5. **Facebook poster:** set `FB_PAGE_ID` and `FB_PAGE_TOKEN`; every run so far
-   has been a no-op (now flagged in the run summary).
-6. **Mapbox billing:** reconcile Aug/Sep usage; today's price sheet doesn't
-   reproduce the June bill, and Search Box free allowance looks different.
-7. **Ward Realty pier still:** ask before embedding; it's the only live
-   island-side image found.
+1. **Poll cadence:** a Vercel Cron (`/api/cron/poll`, every 30 min) now asks
+   GitHub to run poll.yml. It is a no-op until you create a fine-grained PAT
+   (repo nturl/topsail-bridge only, Actions: Read and write), then
+   `env -u HTTPS_PROXY -u HTTP_PROXY vercel env add GITHUB_DISPATCH_TOKEN production`
+   and redeploy. Check by opening `/api/cron/poll` (expect `skipped` or `dispatched`).
+2. **Rate limit** (needs the pricing dialog accepted, usage-based, cents/month):
+   Vercel project topsail-bridge, Firewall, Configure, New Rule "Mapbox API rate
+   limit": If Request Path matches `^/api/(forecast|history|geocode|staticmap)(/|$)`,
+   Then Rate Limit, Fixed Window 60 s, limit 60, key IP, 429. Optionally run it
+   as Log for a day first. No firewall config existed as of 2026-10-09.
+3. **NCDOT:** written OK for snapshot reuse and any sponsor credit, plus a
+   DriveNC developer key. Live video now uses NCDOT's own embed. (Permission
+   drafts for items 3, 4 and 7 are kept outside this public repo.)
+4. **Surfchex and Surf City IGA:** embed permission and a live stream URL.
+5. **Facebook poster:** captions are data-driven and there's a dry run. Follow
+   docs/facebook-setup.md, then `gh secret set FB_PAGE_ID -R nturl/topsail-bridge`,
+   `gh secret set FB_PAGE_TOKEN -R nturl/topsail-bridge`, and run
+   `gh workflow run fb-post -R nturl/topsail-bridge -f mode=turnover -f dry_run=true`.
+6. **Mapbox billing:** confirm the invoice line items and recent invoices in the
+   Mapbox console; the public price sheet doesn't reproduce the June bill
+   (Search Box sessions are the likely difference).
+7. **Ward Realty / RentABeach and The Breezeway:** permission for the pier still
+   and for The Breezeway's live Pier Cam.
 
 ## Considered, not built
 

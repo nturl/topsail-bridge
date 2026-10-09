@@ -3,7 +3,7 @@
 import type Hls from "hls.js";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ISLAND_CAMERA_MODE, ISLAND_HLS } from "@/lib/camera-config";
-import { NCDOT_CAMS, isPlaceholder, type NcdotCam } from "@/lib/cams";
+import { NCDOT_CAMS, isPlaceholder, liveMapUrl, type NcdotCam } from "@/lib/cams";
 import { track } from "@/lib/track";
 
 // This feed's usual failure is silent, not loud: the player stays "playing"
@@ -457,10 +457,45 @@ function Lightbox({ src, alt, onClose }: { src: string; alt: string; onClose: ()
   );
 }
 
+// Live video through NCDOT's own embeddable DriveNC map, loaded only when asked
+// for (the frame brings Google Maps and NCDOT's Google Analytics with it).
+function LiveMap({ cam, onClose }: { cam: NcdotCam; onClose: () => void }) {
+  return (
+    <div className="overflow-hidden rounded-2xl border border-slate-200 dark:border-white/10">
+      <div className="flex items-center justify-between gap-3 bg-slate-50 px-3 py-2 text-xs dark:bg-slate-800">
+        <p className="text-slate-600 dark:text-slate-300">
+          <span className="font-semibold text-slate-800 dark:text-slate-100">Live video:</span> tap the camera pin,
+          then Show Video.
+        </p>
+        <button
+          type="button"
+          onClick={onClose}
+          className="pressable shrink-0 rounded-full bg-white px-3 py-1.5 font-semibold text-sky-800 shadow-sm dark:bg-slate-900 dark:text-sky-300"
+        >
+          Back to snapshot
+        </button>
+      </div>
+      <iframe
+        title={`NCDOT DriveNC live camera map at ${cam.label}`}
+        src={liveMapUrl(cam)}
+        className="block h-[460px] w-full border-0 sm:h-[540px]"
+        allow="fullscreen; autoplay"
+        allowFullScreen
+      />
+      <p className="bg-slate-50 px-3 py-1.5 text-[11px] text-slate-500 dark:bg-slate-800 dark:text-slate-400">
+        NCDOT&apos;s DriveNC map, embedded as NCDOT offers it. It loads Google Maps and Google Analytics.
+      </p>
+    </div>
+  );
+}
+
 function NcdotSnapshot({ cam, fallback }: { cam: NcdotCam; fallback?: { label: string; onClick: () => void } }) {
   const state = useSnapshot(cam.id);
   const [zoom, setZoom] = useState(false);
+  const [live, setLive] = useState(false);
   const close = useCallback(() => setZoom(false), []);
+
+  if (live) return <LiveMap cam={cam} onClose={() => setLive(false)} />;
 
   if (state === "loading") {
     return <CamPlaceholder pulse subtitle="Loading camera view…" />;
@@ -513,14 +548,17 @@ function NcdotSnapshot({ cam, fallback }: { cam: NcdotCam; fallback?: { label: s
       <span className="pointer-events-none absolute right-2 top-2 rounded-full bg-black/55 px-2 py-0.5 text-[10px] font-medium text-white backdrop-blur">
         NCDOT · {shortClock(state.at)}
       </span>
-      <a
-        href={DRIVENC}
-        target="_blank"
-        rel="noreferrer"
-        className="absolute bottom-2 right-2 rounded-full bg-black/55 px-2 py-0.5 text-[10px] font-medium text-white backdrop-blur hover:bg-black/70"
+      <button
+        type="button"
+        onClick={() => {
+          track("cam_live", { cam: cam.id });
+          setLive(true);
+        }}
+        className="pressable absolute bottom-2 right-2 inline-flex items-center gap-1.5 rounded-full bg-white/95 px-3 py-1.5 text-xs font-semibold text-slate-900 shadow-lg hover:bg-white"
       >
-        Live video on DriveNC ↗
-      </a>
+        <span className="h-1.5 w-1.5 rounded-full bg-rose-500" aria-hidden />
+        Watch live
+      </button>
       {zoom && <Lightbox src={state.url} alt={cam.alt} onClose={close} />}
     </div>
   );
