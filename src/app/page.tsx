@@ -14,11 +14,17 @@ import { sharePage } from "@/lib/share";
 import { coordParam } from "@/lib/geo";
 import { HeaderMark } from "@/components/HeaderMark";
 import { TipJar } from "@/components/TipJar";
+import { DEFAULT_DEST, DEFAULT_ORIGIN } from "@/lib/places";
 
 const LS_KEY = "bw.route.v1";
 
 type Route = { origin: Place; dest: Place };
 type Direction = "out" | "back";
+
+// Until someone saves their own route, show the canonical Surf City <-> Hampstead
+// crossing: it is the route the cron measures, so first-time visitors get real
+// numbers instead of a setup screen.
+const DEFAULT_ROUTE: Route = { origin: DEFAULT_ORIGIN, dest: DEFAULT_DEST };
 
 function loadRoute(): Route | null {
   try {
@@ -114,27 +120,30 @@ export default function Page() {
     }
   }, []);
 
-  useEffect(() => {
-    if (hydrated && route) fetchForecast(route, direction);
-  }, [route, direction, hydrated, fetchForecast]);
+  const active = route ?? DEFAULT_ROUTE;
+  const isDefault = !route;
 
   useEffect(() => {
-    if (!hydrated || !route) return;
+    if (hydrated) fetchForecast(active, direction);
+  }, [active, direction, hydrated, fetchForecast]);
+
+  useEffect(() => {
+    if (!hydrated) return;
     const id = setInterval(() => {
-      if (document.visibilityState === "visible") fetchForecast(route, direction);
+      if (document.visibilityState === "visible") fetchForecast(active, direction);
     }, 120_000);
     return () => clearInterval(id);
-  }, [route, direction, hydrated, fetchForecast]);
+  }, [active, direction, hydrated, fetchForecast]);
 
   // Weekly history powers both the trip planner and the heatmap; fetch it once
   // per route + direction up here and share it.
   useEffect(() => {
-    if (!hydrated || !route) {
+    if (!hydrated) {
       setHistory(null);
       return;
     }
-    const from = direction === "out" ? route.origin : route.dest;
-    const to = direction === "out" ? route.dest : route.origin;
+    const from = direction === "out" ? active.origin : active.dest;
+    const to = direction === "out" ? active.dest : active.origin;
     let cancelled = false;
     setHistory(null);
     fetch(`/api/history?o=${coordParam(from)}&d=${coordParam(to)}`)
@@ -146,7 +155,7 @@ export default function Page() {
     return () => {
       cancelled = true;
     };
-  }, [hydrated, route, direction]);
+  }, [hydrated, active, direction]);
 
   // PWAs reopen from the background a lot; refetch when the app comes back
   // (stale after 2 min) or when the connection returns.
@@ -154,7 +163,7 @@ export default function Page() {
     const refresh = () => {
       if (Date.now() - lastFetchRef.current < 120_000) return;
       fetchConditions();
-      if (route) fetchForecast(route, direction);
+      fetchForecast(active, direction);
     };
     const onVisible = () => {
       if (document.visibilityState === "visible") refresh();
@@ -173,7 +182,7 @@ export default function Page() {
       window.removeEventListener("online", onOnline);
       window.removeEventListener("offline", onOffline);
     };
-  }, [route, direction, fetchForecast, fetchConditions]);
+  }, [active, direction, fetchForecast, fetchConditions]);
 
   function applyRoute(origin: Place, dest: Place) {
     const r = { origin, dest };
@@ -200,8 +209,8 @@ export default function Page() {
     }
   }
 
-  const from = route ? (direction === "out" ? route.origin : route.dest) : null;
-  const to = route ? (direction === "out" ? route.dest : route.origin) : null;
+  const from = direction === "out" ? active.origin : active.dest;
+  const to = direction === "out" ? active.dest : active.origin;
   const hasCurve = !!forecast && forecast.points.filter((p) => p.minutes != null).length > 1;
 
   const headerPills = (
@@ -263,23 +272,23 @@ export default function Page() {
             </svg>
           </span>
           <span className="min-w-0 flex-1">
-            <span className="block text-[11px] uppercase tracking-wide text-slate-400">Your route</span>
-            {route && from && to ? (
-              <span className="block truncate font-medium text-slate-800 dark:text-slate-100">
-                {from.label} → {to.label}
-              </span>
-            ) : (
-              <span className="block truncate font-medium text-slate-400">
-                Set your starting point and destination
-              </span>
-            )}
+            <span className="block text-[11px] uppercase tracking-wide text-slate-400">
+              {isDefault ? "The bridge crossing" : "Your route"}
+            </span>
+            <span className="block truncate font-medium text-slate-800 dark:text-slate-100">
+              {isDefault
+                ? direction === "out"
+                  ? "Surf City → Hampstead"
+                  : "Hampstead → Surf City"
+                : `${from.label} → ${to.label}`}
+            </span>
           </span>
           <span className="shrink-0 text-sm font-medium text-sky-600 dark:text-sky-400">
-            {route ? "Edit" : "Set route"}
+            {isDefault ? "Use my route" : "Edit"}
           </span>
         </button>
 
-        {route && (
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
           <div className="relative inline-grid grid-cols-2 rounded-full border border-slate-200/70 bg-white p-0.5 text-sm shadow-[0_1px_2px_rgba(2,6,23,0.04)] dark:border-white/10 dark:bg-slate-900">
             <span
               aria-hidden
@@ -301,12 +310,20 @@ export default function Page() {
               </button>
             ))}
           </div>
-        )}
+          {isDefault && (
+            <p className="text-xs text-slate-500 dark:text-slate-400">
+              Surf City to Hampstead, measured every 30 min.{" "}
+              <button onClick={() => setEditing(true)} className="font-medium text-sky-700 underline-offset-2 hover:underline dark:text-sky-400">
+                Set your own route
+              </button>{" "}
+              for door-to-door times.
+            </p>
+          )}
+        </div>
       </div>
 
-      {error && route && <p className="mb-4 text-sm text-rose-600 dark:text-rose-400">{error}</p>}
+      {error && <p className="mb-4 text-sm text-rose-600 dark:text-rose-400">{error}</p>}
 
-      {route && from && to ? (
         <div className="grid grid-cols-1 gap-5 lg:grid-cols-2 lg:items-start">
           <div className="space-y-5">
             <Hero forecast={forecast} conditions={conditions} loading={loading} />
@@ -344,52 +361,17 @@ export default function Page() {
             </section>
           </div>
         </div>
-      ) : (
-        <div className="space-y-5">
-          <section
-            className="animate-fade-up overflow-hidden rounded-3xl p-7 text-center shadow-[0_16px_40px_-20px_rgba(3,105,161,0.5)]"
-            style={{ background: "linear-gradient(160deg,#38bdf8,#0369a1)" }}
-          >
-            <div className="mx-auto mb-4 flex h-14 w-[88px] items-center justify-center rounded-[50%] border-[3px] border-slate-900 bg-white">
-              <span className="text-xl font-extrabold tracking-wide text-slate-900">TI</span>
-            </div>
-            <p className="mx-auto max-w-sm text-[15px] leading-snug text-white">
-              Set your route to see live and predicted drive times across the Surf City bridge, your weekly
-              rhythm, and the best windows to go.
-            </p>
-            <button
-              onClick={() => setEditing(true)}
-              className="pressable mt-5 rounded-xl bg-white px-5 py-2.5 text-sm font-semibold text-sky-800 shadow-lg hover:bg-sky-50"
-            >
-              Set your route
-            </button>
-            <button
-              onClick={() => setInstallOpen(true)}
-              className="mx-auto mt-3 block text-xs text-white/85 underline underline-offset-4 hover:text-white"
-            >
-              or get the app on your phone
-            </button>
-          </section>
-          <section className={CARD} style={{ animationDelay: "80ms" }}>
-            <Conditions data={conditions} />
-          </section>
-        </div>
-      )}
 
       <section className="mt-6 flex items-center justify-between text-xs text-slate-400">
-        {route ? (
-          <button
-            onClick={() => {
-              fetchForecast(route, direction);
-              fetchConditions();
-            }}
-            className="hover:text-slate-600 dark:hover:text-slate-200"
-          >
-            ↻ Refresh
-          </button>
-        ) : (
-          <span />
-        )}
+        <button
+          onClick={() => {
+            fetchForecast(active, direction);
+            fetchConditions();
+          }}
+          className="hover:text-slate-600 dark:hover:text-slate-200"
+        >
+          ↻ Refresh
+        </button>
         <span>
           {updatedAt
             ? `Updated ${updatedAt.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}`

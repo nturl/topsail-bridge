@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { Cameras } from "@/components/Cameras";
+import { CameraGrid } from "@/components/Cameras";
 import { PageHeader } from "@/components/PageHeader";
 import { TipJar } from "@/components/TipJar";
 import { ISLAND_CAMERA_MODE } from "@/lib/camera-config";
@@ -30,26 +30,30 @@ const PROSE = "mt-2 text-[15px] leading-relaxed text-slate-600 dark:text-slate-3
 
 const CAM_NOTES = [
   {
-    name: "Island roundabout (Surf City bridge cam)",
-    body: ISLAND_CAM_EMBEDDED
-      ? "The Island tab shows configured live video from the island side of the Surf City bridge."
-      : "Surfchex hosts live video of the roundabout on the island side of the Surf City bridge. Their player only runs on Surfchex, so the Island tab links directly to it.",
+    name: "Surf City (NC-50/210 on the mainland)",
+    body: "The closest camera to the bridge: the run of lights on the Surf City mainland that every car funnels through before the climb. If this is backed up, so is the bridge.",
   },
   {
     name: "NC-210 at JH Batts Rd",
-    body: "NCDOT's camera on the mainland approach to the bridge. This is the last stretch everyone funnels through, whether you came down NC-210 from I-40 or up NC-50 through Hampstead.",
+    body: "NCDOT's camera on the mainland approach from I-40 and Hampstead, a mile from the bridge.",
   },
   {
-    name: "US-17 at Scotts Hill",
+    name: "US-17 at Porters Neck",
     body: "The main feeder from Wilmington. On summer Saturdays, backups between Porters Neck and Hampstead show up here before they reach the bridge.",
   },
   {
-    name: "US-17 (Market St) at Porters Neck",
-    body: "The Ogden/Porters Neck stretch of Market Street, where Wilmington-side congestion usually begins. If this camera looks bad, add time no matter which beach road you take.",
+    name: "US-17 (Market St) at Torchwood, Ogden",
+    body: "The Ogden stretch of Market Street, where Wilmington-side congestion usually begins. If this camera looks bad, add time no matter which beach road you take.",
   },
   {
     name: "I-40 at Exit 408 (NC-210)",
     body: "The exit most Raleigh and Triangle traffic takes for Surf City. A backup on the ramp here means the NC-210 corridor is loaded.",
+  },
+  {
+    name: "Island roundabout (Surf City bridge cam)",
+    body: ISLAND_CAM_EMBEDDED
+      ? "The Island view shows configured live video from the island side of the Surf City bridge."
+      : "Surfchex hosts live video of the roundabout on the island side of the Surf City bridge. Their player only runs on Surfchex, so the Island view links to it.",
   },
 ];
 
@@ -85,8 +89,8 @@ const FAQ = [
   {
     q: "Is there a live camera of the Surf City bridge?",
     a: ISLAND_CAM_EMBEDDED
-      ? "Yes. The Island tab shows the configured live camera on the island side of the bridge, and the NC-210 tab shows NCDOT's camera on the mainland approach."
-      : "Yes. The Island tab links to Surfchex's live roundabout camera on the island side of the bridge. The NC-210 tab shows NCDOT's camera on the mainland approach without leaving this page.",
+      ? "Yes. The Island view shows the configured live camera on the island side of the bridge, and the Surf City and NC-210 cameras show NCDOT's views of the mainland approach."
+      : "Yes. The Island view links to Surfchex's live roundabout camera on the island side of the bridge. The Surf City and NC-210 cameras show NCDOT's views of the mainland approach without leaving this page.",
   },
   {
     q: "How can I check Topsail traffic before I leave home?",
@@ -98,7 +102,7 @@ const FAQ = [
   },
   {
     q: "How often do the NCDOT cameras update?",
-    a: "NCDOT serves a fresh snapshot roughly every minute, and this page refreshes them automatically about every 30 seconds while it is open.",
+    a: "NCDOT serves a fresh snapshot roughly every minute, and this page refreshes them automatically about every 30 seconds while it is open. Each picture shows the time it was fetched; tap one to see it full screen.",
   },
 ];
 
@@ -110,12 +114,12 @@ export default function CamsPage() {
         lede={
           ISLAND_CAM_EMBEDDED
             ? "Live island-side and NCDOT views of NC-210, US-17, and I-40 in one place."
-            : "Live NCDOT views of NC-210, US-17, and I-40 in one place, plus a direct link to Surfchex's Surf City bridge roundabout cam."
+            : "Every NCDOT camera on the way to the bridge in one place: Surf City, NC-210, US-17, and I-40, plus a link to Surfchex's Surf City bridge roundabout cam."
         }
       />
 
       <section className={`${CARD} animate-fade-up`}>
-        <Cameras />
+        <CameraGrid />
       </section>
 
       <section className="animate-fade-up py-8" style={{ animationDelay: "80ms" }}>
@@ -138,8 +142,8 @@ export default function CamsPage() {
           <a href="https://drivenc.gov" target="_blank" rel="noreferrer" className="text-sky-700 hover:underline dark:text-sky-400">
             DriveNC.gov
           </a>
-          . We checked: these five are every traffic camera NCDOT operates on the routes to the island — there are
-          none on the island itself, at the North Topsail bridge, or in Holly Ridge or Sneads Ferry.
+          . Snapshots only: for NCDOT&apos;s live video, open the camera on DriveNC. There are no NCDOT cameras on the
+          island itself, at the North Topsail bridge, or in Holly Ridge or Sneads Ferry.
         </p>
       </section>
 

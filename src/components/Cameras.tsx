@@ -3,9 +3,7 @@
 import type Hls from "hls.js";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ISLAND_CAMERA_MODE, ISLAND_HLS } from "@/lib/camera-config";
-
-// NCDOT serves this exact PNG (constant size) when a camera is temporarily down.
-const PLACEHOLDER_BYTES = 15136;
+import { NCDOT_CAMS, isPlaceholder, type NcdotCam } from "@/lib/cams";
 
 // This feed's usual failure is silent, not loud: the player stays "playing"
 // while the picture freezes, or it drifts minutes behind the live edge and
@@ -21,40 +19,10 @@ const REBUILD_COOLDOWN_MS = 45_000;
 const MAX_DRIFT_S = 20; // this far behind the live edge -> seek forward
 const RETRY_BACKOFF_MS = [8_000, 20_000, 60_000];
 
-const TABS = [
-  { key: "island", label: "Island", caption: "Surf City roundabout, island side, hosted by Surfchex." },
-  { key: "mainland", label: "NC-210", caption: "NC-210 approach on the mainland, via NCDOT." },
-  { key: "us17", label: "US-17", caption: "US-17 at Scotts Hill — the approach from Wilmington, via NCDOT." },
-  { key: "porters", label: "Porters Neck", caption: "US-17 (Market St) at Porters Neck — where Wilmington-side backups start, via DriveNC." },
-  { key: "i40", label: "I-40", caption: "I-40 Exit 408 at NC-210 — the approach from Raleigh, via NCDOT." },
-] as const;
-type CamKey = (typeof TABS)[number]["key"];
+type CamKey = (typeof NCDOT_CAMS)[number]["key"] | "island";
 
-// Snapshots come through /api/cam (server-side proxy) because NCDOT's CORS
-// headers are malformed for direct browser fetches; the DriveNC link is the
-// upstream source for humans.
-const NCDOT: Record<Exclude<CamKey, "island">, { id: string; alt: string; offlineSubtitle: string }> = {
-  mainland: {
-    id: "5400",
-    alt: "NC-210 mainland approach to the Surf City bridge",
-    offlineSubtitle: "NC-210 mainland feed",
-  },
-  us17: {
-    id: "6043",
-    alt: "US-17 at Scotts Hill, the approach to Topsail Island from Wilmington",
-    offlineSubtitle: "US-17 Scotts Hill feed",
-  },
-  porters: {
-    id: "4781",
-    alt: "US-17 Market Street at Porters Neck, where Wilmington-side congestion begins",
-    offlineSubtitle: "US-17 Porters Neck feed",
-  },
-  i40: {
-    id: "6116",
-    alt: "I-40 Exit 408 at NC-210, the approach to Topsail Island from Raleigh",
-    offlineSubtitle: "I-40 at NC-210 feed",
-  },
-};
+const ISLAND_CAPTION = "Surf City roundabout, island side, hosted by Surfchex.";
+const DRIVENC = "https://www.drivenc.gov/";
 
 // Topsail Island oval, recreated in the generic regional-sticker style (initials
 // + place name in an oval) rather than copying any specific brand's logo.
@@ -381,115 +349,276 @@ function IslandVideo({ src, isSurfchex }: { src: string; isSurfchex: boolean }) 
   );
 }
 
-// NCDOT gates its live video, but serves a public snapshot PNG per camera that
-// updates ~every minute. Refresh it on an interval with a cache-bust.
-function NcdotSnapshot({ cam }: { cam: (typeof NCDOT)[Exclude<CamKey, "island">] }) {
-  // "loading" | "offline" (cam down / NCDOT placeholder) | { url } (live frame)
-  const [state, setState] = useState<"loading" | "offline" | { url: string }>("loading");
+
+// "5:41p", matching the conditions chips.
+function shortClock(d: Date): string {
+  return d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" }).toLowerCase().replace(/\s?([ap])m/, "$1");
+}
+
+// NCDOT gates its live video, but serves a public snapshot per camera that
+// updates about once a minute. Ask on a 30-second bucket so the CDN shares
+// each frame across visitors instead of fetching one per person.
+type Snap = "loading" | "offline" | { url: string; at: Date };
+
+function useSnapshot(id: string): Snap {
+  const [state, setState] = useState<Snap>("loading");
 
   useEffect(() => {
     let alive = true;
     let objUrl: string | null = null;
     setState("loading");
+    // A failed refresh keeps the last good frame for a few minutes (its
+    // timestamp shows its age) rather than flashing the "down" card.
+    const fail = () =>
+      setState((prev) => (typeof prev === "object" && Date.now() - prev.at.getTime() < 300_000 ? prev : "offline"));
     const load = async () => {
       try {
-        const r = await fetch(`/api/cam?id=${cam.id}&t=${Date.now()}`, { cache: "no-store" });
-        if (!r.ok) {
-          if (alive) setState("offline");
-          return;
-        }
+        const r = await fetch(`/api/cam?id=${id}&t=${Math.floor(Date.now() / 30_000)}`);
+        if (!alive) return;
+        if (!r.ok) return fail();
         const blob = await r.blob();
         if (!alive) return;
-        if (blob.size === PLACEHOLDER_BYTES) {
-          setState("offline"); // NCDOT's "no live camera feed" graphic
+        if (isPlaceholder(blob.size)) {
+          setState("offline");
           return;
         }
+        const next = URL.createObjectURL(blob);
         if (objUrl) URL.revokeObjectURL(objUrl);
-        objUrl = URL.createObjectURL(blob);
-        setState({ url: objUrl });
+        objUrl = next;
+        setState({ url: next, at: new Date() });
       } catch {
-        if (alive) setState("offline");
+        if (alive) fail();
       }
     };
     load();
-    const id = setInterval(() => {
+    const t = setInterval(() => {
       if (document.visibilityState === "visible") load();
     }, 30_000);
     return () => {
       alive = false;
-      clearInterval(id);
+      clearInterval(t);
       if (objUrl) URL.revokeObjectURL(objUrl);
     };
-  }, [cam]);
+  }, [id]);
+
+  return state;
+}
+
+// Which cameras are showing a picture right now (null until known).
+function useCamStatus(): Record<string, boolean> | null {
+  const [status, setStatus] = useState<Record<string, boolean> | null>(null);
+  useEffect(() => {
+    let alive = true;
+    const load = () =>
+      fetch("/api/cams")
+        .then((r) => (r.ok ? r.json() : null))
+        .then((j: { cams?: { id: string; live: boolean }[] } | null) => {
+          if (alive && j?.cams) setStatus(Object.fromEntries(j.cams.map((c) => [c.id, c.live])));
+        })
+        .catch(() => {});
+    load();
+    const t = setInterval(() => {
+      if (document.visibilityState === "visible") load();
+    }, 120_000);
+    return () => {
+      alive = false;
+      clearInterval(t);
+    };
+  }, []);
+  return status;
+}
+
+function Lightbox({ src, alt, onClose }: { src: string; alt: string; onClose: () => void }) {
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+  return (
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-label={alt}
+      onClick={onClose}
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 p-3"
+    >
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src={src} alt={alt} className="max-h-full max-w-full rounded-lg object-contain" />
+      <button
+        type="button"
+        onClick={onClose}
+        aria-label="Close camera view"
+        className="absolute right-4 top-[max(1rem,env(safe-area-inset-top))] grid h-10 w-10 place-items-center rounded-full bg-white/15 text-xl text-white backdrop-blur"
+      >
+        ×
+      </button>
+    </div>
+  );
+}
+
+function NcdotSnapshot({ cam, fallback }: { cam: NcdotCam; fallback?: { label: string; onClick: () => void } }) {
+  const state = useSnapshot(cam.id);
+  const [zoom, setZoom] = useState(false);
+  const close = useCallback(() => setZoom(false), []);
 
   if (state === "loading") {
     return <CamPlaceholder pulse subtitle="Loading camera view…" />;
   }
   if (state === "offline") {
     return (
-      <CamPlaceholder
-        title="Camera is down right now"
-        subtitle={cam.offlineSubtitle}
-        href={`https://www.drivenc.gov/map/Cctv/${cam.id}`}
-        hrefLabel="Check on DriveNC"
-      />
+      <div className="relative">
+        <CamPlaceholder title="Camera is down right now" subtitle={`${cam.label} feed · NCDOT`} />
+        {fallback && (
+          <button
+            type="button"
+            onClick={fallback.onClick}
+            className="pressable absolute bottom-3 left-1/2 -translate-x-1/2 rounded-full bg-white px-3.5 py-1.5 text-xs font-semibold text-sky-800 shadow-lg"
+          >
+            Show {fallback.label} instead
+          </button>
+        )}
+      </div>
     );
   }
   return (
     <div className="relative overflow-hidden rounded-2xl bg-slate-900">
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img src={state.url} alt={cam.alt} className="aspect-video w-full object-cover" />
-      <span className="absolute left-2 top-2 rounded-full bg-black/55 px-2 py-0.5 text-[10px] font-medium text-white backdrop-blur">
-        NCDOT · refreshes ~1 min
+      <button
+        type="button"
+        onClick={() => setZoom(true)}
+        className="block w-full cursor-zoom-in"
+        aria-label={`Enlarge the ${cam.label} camera`}
+      >
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src={state.url} alt={cam.alt} className="aspect-video w-full object-cover" />
+      </button>
+      <span className="pointer-events-none absolute right-2 top-2 rounded-full bg-black/55 px-2 py-0.5 text-[10px] font-medium text-white backdrop-blur">
+        NCDOT · {shortClock(state.at)}
       </span>
+      <a
+        href={DRIVENC}
+        target="_blank"
+        rel="noreferrer"
+        className="absolute bottom-2 right-2 rounded-full bg-black/55 px-2 py-0.5 text-[10px] font-medium text-white backdrop-blur hover:bg-black/70"
+      >
+        Live video on DriveNC ↗
+      </a>
+      {zoom && <Lightbox src={state.url} alt={cam.alt} onClose={close} />}
     </div>
   );
 }
 
+function IslandView() {
+  return ISLAND_CAMERA_MODE !== "link" ? (
+    <IslandVideo src={ISLAND_HLS} isSurfchex={ISLAND_CAMERA_MODE === "surfchex"} />
+  ) : (
+    <SurfchexLink />
+  );
+}
+
 export function Cameras() {
-  // Lead with the closest camera that is always available on-site. The island
-  // tab links out unless an owned/authorized feed is configured.
-  const [view, setView] = useState<CamKey>("mainland");
-  const tab = "pressable shrink-0 rounded-full px-3 py-1 transition-colors";
-  const active = "bg-white text-slate-900 shadow-sm dark:bg-slate-700 dark:text-white";
-  const idle = "text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200";
-  const current = TABS.find((t) => t.key === view) ?? TABS[0];
-  const islandEmbedEnabled = ISLAND_CAMERA_MODE !== "link";
-  const islandSourceIsSurfchex = ISLAND_CAMERA_MODE === "surfchex";
-  const caption =
-    view === "island" && ISLAND_CAMERA_MODE === "authorized" ? "Live authorized island camera." : current.caption;
+  const status = useCamStatus();
+  const [view, setView] = useState<CamKey>(NCDOT_CAMS[0].key);
+  const userPicked = useRef(false);
+
+  // Open on the nearest camera that is actually showing a picture, unless the
+  // visitor has already picked one.
+  useEffect(() => {
+    if (!status || userPicked.current) return;
+    const firstLive = NCDOT_CAMS.find((c) => status[c.id]);
+    if (firstLive) setView(firstLive.key);
+  }, [status]);
+
+  const choose = (k: CamKey) => {
+    userPicked.current = true;
+    setView(k);
+  };
+
+  const cam = NCDOT_CAMS.find((c) => c.key === view);
+  const nextLive = NCDOT_CAMS.find((c) => c.key !== view && status?.[c.id]);
+  const tabs = [
+    ...NCDOT_CAMS.map((c) => ({ key: c.key as CamKey, label: c.label, live: status ? status[c.id] : undefined })),
+    { key: "island" as CamKey, label: "Island", live: undefined },
+  ];
+  const caption = cam
+    ? cam.caption
+    : ISLAND_CAMERA_MODE === "authorized"
+      ? "Live authorized island camera."
+      : ISLAND_CAPTION;
 
   return (
     <div>
-      <div
-        role="group"
-        aria-label="Traffic camera view"
-        className="mb-3 inline-flex max-w-full overflow-x-auto rounded-full bg-slate-100 p-0.5 text-xs font-medium dark:bg-slate-800"
-      >
-        {TABS.map((t) => (
+      <div role="group" aria-label="Traffic camera view" className="mb-3 flex flex-wrap gap-1.5 text-xs font-medium">
+        {tabs.map((t) => (
           <button
             key={t.key}
             type="button"
             aria-pressed={view === t.key}
-            onClick={() => setView(t.key)}
-            className={`${tab} ${view === t.key ? active : idle}`}
+            aria-label={t.live === false ? `${t.label} (camera down)` : t.label}
+            onClick={() => choose(t.key)}
+            className={`pressable inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 transition-colors ${
+              view === t.key
+                ? "border-slate-900 bg-slate-900 text-white dark:border-white dark:bg-white dark:text-slate-900"
+                : "border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:text-slate-900 dark:border-white/10 dark:bg-slate-900 dark:text-slate-300 dark:hover:text-white"
+            }`}
           >
+            {t.live !== undefined && (
+              <span
+                aria-hidden
+                className={`h-1.5 w-1.5 rounded-full ${t.live ? "bg-emerald-500" : "bg-slate-300 dark:bg-slate-600"}`}
+              />
+            )}
             {t.label}
           </button>
         ))}
       </div>
 
-      {view === "island" ? (
-        islandEmbedEnabled ? (
-          <IslandVideo src={ISLAND_HLS} isSurfchex={islandSourceIsSurfchex} />
-        ) : (
-          <SurfchexLink />
-        )
+      {cam ? (
+        <NcdotSnapshot
+          key={cam.id}
+          cam={cam}
+          fallback={nextLive ? { label: nextLive.label, onClick: () => choose(nextLive.key) } : undefined}
+        />
       ) : (
-        <NcdotSnapshot cam={NCDOT[view]} />
+        <IslandView />
       )}
 
-      <p className="mt-2 text-xs text-slate-400">{caption}</p>
+      <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
+        {caption}
+        {cam && (
+          <>
+            {" "}
+            Camera:{" "}
+            <a href={DRIVENC} target="_blank" rel="noreferrer" className="underline-offset-2 hover:underline">
+              NCDOT via DriveNC
+            </a>
+            .
+          </>
+        )}
+      </p>
+    </div>
+  );
+}
+
+// Every camera at once, for /cams.
+export function CameraGrid() {
+  return (
+    <div className="grid gap-5 sm:grid-cols-2">
+      {NCDOT_CAMS.map((c) => (
+        <figure key={c.id}>
+          <NcdotSnapshot cam={c} />
+          <figcaption className="mt-2 text-sm leading-snug">
+            <span className="font-medium text-slate-800 dark:text-slate-100">{c.label}.</span>{" "}
+            <span className="text-slate-500 dark:text-slate-400">{c.caption}</span>
+          </figcaption>
+        </figure>
+      ))}
+      <figure>
+        <IslandView />
+        <figcaption className="mt-2 text-sm leading-snug">
+          <span className="font-medium text-slate-800 dark:text-slate-100">Island.</span>{" "}
+          <span className="text-slate-500 dark:text-slate-400">{ISLAND_CAPTION}</span>
+        </figcaption>
+      </figure>
     </div>
   );
 }
