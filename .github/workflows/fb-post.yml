@@ -20,6 +20,11 @@ on:
         type: choice
         options: [outlook, weekend, turnover, return]
         default: outlook
+      dry_run:
+        description: "Dry run: print the post, send nothing (works without secrets)"
+        required: false
+        type: boolean
+        default: true
 
 jobs:
   post:
@@ -31,7 +36,7 @@ jobs:
         with:
           node-version: "20"
 
-      - run: node scripts/fb-post.mjs ${{ inputs.mode }}
+      - run: node scripts/fb-post.mjs ${{ inputs.mode }} ${{ inputs.dry_run && '--dry-run' || '' }}
         env:
           FB_PAGE_ID: ${{ secrets.FB_PAGE_ID }}
           FB_PAGE_TOKEN: ${{ secrets.FB_PAGE_TOKEN }}
