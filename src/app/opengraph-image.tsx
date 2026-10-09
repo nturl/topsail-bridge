@@ -4,7 +4,7 @@ import { DEFAULT_ORIGIN, DEFAULT_DEST } from "@/lib/places";
 
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
-export const alt = "Topsail Traffic — when to leave Topsail Island";
+export const alt = "Topsail Traffic: when to leave Topsail Island";
 export const revalidate = 300;
 
 // The wordmark uses the app's serif (Instrument Serif). Fetched once at build;
@@ -27,7 +27,7 @@ export default async function OpengraphImage() {
 
   let delay: number | null = null;
   try {
-    const fc = await buildForecast(DEFAULT_ORIGIN, DEFAULT_DEST, 15, 15);
+    const fc = await buildForecast(DEFAULT_ORIGIN, DEFAULT_DEST, 15, 15, revalidate);
     if (fc.now != null && fc.freeFlow != null) delay = Math.max(0, fc.now - fc.freeFlow);
   } catch {
     delay = null;

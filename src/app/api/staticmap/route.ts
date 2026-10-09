@@ -20,14 +20,24 @@ export async function GET(req: NextRequest) {
   const o = parse(sp.get("o"), DEFAULT_ORIGIN);
   const d = parse(sp.get("d"), DEFAULT_DEST);
   const dark = sp.get("dark") === "1";
-  if (!inServiceArea(o) || !inServiceArea(d)) return new Response(null, { status: 400 });
+  // Failures get a short CDN cache too, so a retry storm doesn't re-run Mapbox.
+  const fail = (status: number) => new Response(null, { status, headers: { "Cache-Control": "public, s-maxage=60" } });
+  if (!inServiceArea(o) || !inServiceArea(d)) return fail(400);
 
   const route = await routeWithCongestion(o, d);
-  if (!route) return new Response(null, { status: 404 });
+  if (!route) return fail(404);
 
   const overlays = congestionOverlays(route.polyline, route.congestion);
-  const img = await fetch(staticMapUrl(route.polyline, overlays, o, d, dark), { next: { revalidate: 600 } });
-  if (!img.ok || !img.body) return new Response(null, { status: 502 });
+  let img: Response;
+  try {
+    img = await fetch(staticMapUrl(route.polyline, overlays, o, d, dark), {
+      next: { revalidate: 600 },
+      signal: AbortSignal.timeout(8000),
+    });
+  } catch {
+    return fail(504);
+  }
+  if (!img.ok || !img.body) return fail(502);
 
   return new Response(img.body, {
     headers: {

@@ -1,6 +1,7 @@
 // NCDOT DriveNC snapshot cameras on the routes to the island, nearest the
-// bridge first. Shared by the /api/cam proxy (as its allowlist), the /api/cams
-// health check, and the camera UI. Snapshots only: NCDOT's terms allow
+// bridge first (locations checked against OpenStreetMap). Shared by the
+// /api/cam proxy (as its allowlist), the /api/cams health check, and the
+// camera UI. Snapshots only: NCDOT's terms allow
 // unaltered non-commercial reuse of the images, but nothing grants embedding
 // their live video, so live video links out to DriveNC.
 export type NcdotCam = {
@@ -13,18 +14,18 @@ export type NcdotCam = {
 
 export const NCDOT_CAMS: NcdotCam[] = [
   {
+    key: "roland",
+    id: "5400",
+    label: "Roland Ave",
+    caption: "NC-50/210 (Roland Ave) at JH Batts Rd, the last stretch before the bridge.",
+    alt: "Roland Avenue (NC-50/210) at JH Batts Road, the mainland approach to the Surf City bridge",
+  },
+  {
     key: "surfcity",
     id: "6157",
     label: "Surf City",
-    caption: "NC-50/210 on the Surf City mainland, the last stretch of lights before the bridge.",
-    alt: "NC-50/210 traffic on the Surf City mainland approach to the bridge",
-  },
-  {
-    key: "nc210",
-    id: "5400",
-    label: "NC-210",
-    caption: "NC-210 at JH Batts Rd, the mainland approach from I-40.",
-    alt: "NC-210 at JH Batts Road, the mainland approach to the Surf City bridge",
+    caption: "Where NC-50 and NC-210 meet at Roland Ave on the Surf City mainland. Traffic from Hampstead and Holly Ridge merges here.",
+    alt: "The NC-50 and NC-210 junction at Roland Avenue on the Surf City mainland",
   },
   {
     key: "porters",
@@ -37,8 +38,8 @@ export const NCDOT_CAMS: NcdotCam[] = [
     key: "ogden",
     id: "4781",
     label: "Ogden",
-    caption: "US-17 (Market St) at Torchwood in Ogden, where Wilmington-side backups start.",
-    alt: "US-17 Market Street at Torchwood in Ogden, where Wilmington-side congestion begins",
+    caption: "US-17 (Market St) at Torchwood in Ogden, on the Wilmington end of the trip.",
+    alt: "US-17 Market Street at Torchwood in Ogden, Wilmington",
   },
   {
     key: "i40",

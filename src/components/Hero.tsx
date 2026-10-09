@@ -62,10 +62,14 @@ export function Hero({
   const call = buildCall(forecast, conditions);
   const now = forecast?.now ?? null;
   const shownNow = useCountUp(now);
-  const best = forecast?.best?.minutes ?? null;
   const worst = forecast?.worst?.minutes ?? null;
-  const hasGauge = now != null && best != null && worst != null && worst > best;
-  const pct = hasGauge ? Math.max(0, Math.min(1, (now - best) / (worst - best))) * 100 : 50;
+  // The gauge runs from a clear run to well past "heavy", on the same scale
+  // the verdict uses, so a green "Clear" can never sit at the red end.
+  const lo = call.base;
+  const hi = lo != null && call.heavyAt != null ? Math.max(lo + Math.round(call.heavyAt * 1.35), worst ?? 0) : null;
+  const hasGauge = now != null && lo != null && hi != null;
+  const pct = hasGauge ? Math.max(0, Math.min(1, (now - lo) / (hi - lo))) * 100 : 50;
+  const asOf = forecast ? new Date(forecast.generatedAt) : null;
 
   return (
     <section className="relative animate-fade-up overflow-hidden rounded-3xl border border-slate-200/70 bg-white p-6 shadow-[0_1px_2px_rgba(2,6,23,0.04),0_16px_40px_-24px_rgba(2,6,23,0.25)] dark:border-white/10 dark:bg-slate-900 dark:shadow-[0_16px_40px_-24px_rgba(0,0,0,0.8)]">
@@ -83,11 +87,17 @@ export function Hero({
             </span>
             <span className="pb-1 text-lg text-slate-400">min</span>
           </div>
-          {forecast?.distanceMi != null && (
-            <p className="mt-1 text-xs text-slate-400">{forecast.distanceMi.toFixed(1)} mi door to door</p>
+          {forecast?.distanceMi != null && asOf && (
+            <p className="mt-1 text-xs text-slate-400">
+              {forecast.distanceMi.toFixed(1)} mi door to door · live as of{" "}
+              {asOf.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: "America/New_York" })}
+            </p>
           )}
         </div>
-        <span className={`flex items-center gap-1.5 rounded-full px-3 py-1 text-sm font-medium ${PILL[call.tone]}`}>
+        <span
+          role="status"
+          className={`flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1 text-sm font-medium ${PILL[call.tone]}`}
+        >
           <span className="h-1.5 w-1.5 rounded-full bg-current opacity-70" />
           {call.verdict}
         </span>
@@ -105,21 +115,24 @@ export function Hero({
             />
           </div>
           <div className="mt-1.5 flex justify-between text-[11px] text-slate-400">
-            <span>{best} min best · {forecast?.best?.clock}</span>
-            <span>up to {worst} min · {forecast?.worst?.clock}</span>
+            <span>{lo} min · clear run</span>
+            <span>{hi}+ min · heavy</span>
           </div>
         </div>
       )}
 
-      {forecast?.freeFlow != null && now != null && (
+      {forecast?.freeFlow != null && call.delay != null && (
         <p className="mt-3 text-xs text-slate-500 dark:text-slate-400">
           A clear run is{" "}
-          <span className="font-medium text-slate-700 dark:text-slate-200">{forecast.freeFlow} min</span>. The bridge is
-          adding about{" "}
-          <span className="font-medium text-slate-700 dark:text-slate-200">
-            {Math.max(0, now - forecast.freeFlow)} min
-          </span>{" "}
-          right now.
+          <span className="font-medium text-slate-700 dark:text-slate-200">{forecast.freeFlow} min</span>.{" "}
+          {call.delay === 0 ? (
+            "Traffic is adding nothing right now."
+          ) : (
+            <>
+              Traffic is adding about{" "}
+              <span className="font-medium text-slate-700 dark:text-slate-200">{call.delay} min</span> right now.
+            </>
+          )}
         </p>
       )}
 

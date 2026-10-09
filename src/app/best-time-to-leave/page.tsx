@@ -1,14 +1,14 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import measured from "@/data/measured.json";
+import bundledMeasured from "@/data/measured.json";
 import { heatColor, heatScale, hourLabel } from "@/lib/heat";
 import { PageHeader } from "@/components/PageHeader";
 import { TipJar } from "@/components/TipJar";
 
 export const metadata: Metadata = {
-  title: "Best Time to Leave (and Get to) Topsail Island — Measured, Not Guessed",
+  title: "Best Time to Leave (and Get to) Topsail Island: Measured, Not Guessed",
   description:
-    "When to cross the Surf City bridge, from live drive times measured every 30 minutes all summer: the quiet windows, the Saturday changeover crunch, and the hours to avoid.",
+    "When to cross the Surf City bridge, from live drive times measured through the day since June: the quiet windows, the Saturday changeover crunch, and the hours to avoid.",
   alternates: { canonical: "/best-time-to-leave" },
   openGraph: {
     title: "The best time to leave (and get to) Topsail Island",
@@ -21,6 +21,23 @@ const HOURS = Array.from({ length: 16 }, (_, i) => i + 6); // 6a..9p
 const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
 type Grid = Record<string, Record<string, { min: number; n: number }>>;
+type Measured = { samples: number; firstAt: string; lastAt: string; out: Grid; back: Grid };
+
+// The poll workflow refreshes measured.json in the repo several times a day,
+// but this site only redeploys by hand. Read it live (hourly) so the page keeps
+// up, and fall back to the copy bundled at build time.
+export const revalidate = 3600;
+const MEASURED_RAW = "https://raw.githubusercontent.com/nturl/topsail-bridge/main/src/data/measured.json";
+
+async function loadMeasured(): Promise<Measured> {
+  try {
+    const r = await fetch(MEASURED_RAW, { next: { revalidate: 3600 }, signal: AbortSignal.timeout(8000) });
+    if (r.ok) return (await r.json()) as Measured;
+  } catch {
+    /* fall through */
+  }
+  return bundledMeasured as Measured;
+}
 
 function cellsOf(grid: Grid): number[] {
   const out: number[] = [];
@@ -38,9 +55,9 @@ function median(a: number[]): number {
 }
 
 // Off-peak baseline: everything before 9am and from 6pm on, across both directions.
-function baseline(): number {
+function baseline(measured: Measured): number {
   const vals: number[] = [];
-  for (const grid of [measured.out as Grid, measured.back as Grid]) {
+  for (const grid of [measured.out, measured.back]) {
     for (let d = 0; d < 7; d++) for (const h of HOURS) {
       if (h >= 9 && h < 18) continue;
       const c = grid[String(d)]?.[String(h)];
@@ -59,6 +76,35 @@ function peak(grid: Grid, dow: number, from: number, to: number): { min: number;
   return best;
 }
 
+// "Easy before 10a and after 5p" for one day (or a set of days) and direction:
+// the busy span is the hours more than 3 minutes over the off-peak baseline.
+function crossBy(grid: Grid, days: number[], base: number): string {
+  const busy: number[] = [];
+  let peakMin = 0;
+  let peakHod = 0;
+  for (const h of HOURS) {
+    const vals = days.flatMap((d) => (grid[String(d)]?.[String(h)] ? [grid[String(d)][String(h)].min] : []));
+    if (!vals.length) continue;
+    const m = median(vals);
+    if (m > base + 3) busy.push(h);
+    if (m > peakMin) {
+      peakMin = m;
+      peakHod = h;
+    }
+  }
+  if (!busy.length) return `Easy all day (about ${base} min)`;
+  const first = busy[0];
+  const last = busy[busy.length - 1];
+  return `Easy before ${hourLabel(first)} and after ${hourLabel(last + 1)}. Peak ${peakMin} min at ${hourLabel(peakHod)}`;
+}
+
+const CROSS_BY_ROWS = [
+  { label: "Friday", days: [5] },
+  { label: "Saturday", days: [6] },
+  { label: "Sunday", days: [0] },
+  { label: "Mon to Thu", days: [1, 2, 3, 4] },
+];
+
 function fmtDate(iso: string): string {
   return new Date(iso).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric", timeZone: "America/New_York" });
 }
@@ -73,8 +119,8 @@ function HeatTable({ grid, title, subtitle }: { grid: Grid; title: string; subti
   return (
     <div>
       <div className="mb-2 flex items-baseline justify-between">
-        <h3 className="text-[11px] font-medium uppercase tracking-[0.08em] text-slate-400">{title}</h3>
-        <span className="text-xs text-slate-400">{subtitle}</span>
+        <h3 className="text-[11px] font-medium uppercase tracking-[0.08em] text-slate-500 dark:text-slate-400">{title}</h3>
+        <span className="text-xs text-slate-500 dark:text-slate-400">{subtitle}</span>
       </div>
       <div className="overflow-x-auto">
         <table className="w-full min-w-[560px] border-separate border-spacing-0.5 text-center text-[10px] leading-none">
@@ -116,10 +162,11 @@ function HeatTable({ grid, title, subtitle }: { grid: Grid; title: string; subti
   );
 }
 
-export default function BestTimePage() {
-  const out = measured.out as Grid;
-  const back = measured.back as Grid;
-  const base = baseline();
+export default async function BestTimePage() {
+  const measured = await loadMeasured();
+  const out = measured.out;
+  const back = measured.back;
+  const base = baseline(measured);
   const satIn = peak(back, 6, 9, 12); // Saturday late-morning check-in wave, inbound
   const satOut = peak(out, 6, 9, 17); // Saturday daytime, outbound
   const friOut = peak(out, 5, 14, 18); // Friday afternoon, outbound
@@ -128,11 +175,11 @@ export default function BestTimePage() {
   const FAQ = [
     {
       q: "What is the best time to cross the Surf City bridge?",
-      a: `Before 9 in the morning or after 6 in the evening, any day of the week. In our measurements the benchmark crossing runs about ${base} minutes in those windows, every single day — even summer Saturdays.`,
+      a: `Before 9 in the morning or after 6 in the evening, any day of the week. In our measurements the benchmark crossing usually runs about ${base} minutes in those windows, even on summer Saturdays.`,
     },
     {
       q: "What is the worst time to get to Topsail Island?",
-      a: `Saturday late morning. Between the 10am rental check-out wave and day-trippers heading for the beach, inbound drive times have peaked around ${satIn.min} minutes at ${hourLabel(satIn.hod)} — roughly double a normal crossing.`,
+      a: `Saturday late morning. Between the 10am rental check-out wave and day-trippers heading for the beach, inbound drive times have peaked around ${satIn.min} minutes at ${hourLabel(satIn.hod)}, roughly double a normal crossing.`,
     },
     {
       q: "When should I leave Topsail Island on check-out day?",
@@ -152,7 +199,7 @@ export default function BestTimePage() {
     <main className="mx-auto w-full max-w-3xl px-5 py-8 md:py-12">
       <PageHeader
         title="The best time to leave (and get to) Topsail Island"
-        lede={`Not folklore — measurement. Topsail Traffic has logged a live drive time across the Surf City bridge every 30 minutes since ${fmtDate(measured.firstAt)}: ${measured.samples.toLocaleString()} readings and counting. Here is what they say.`}
+        lede={`Not folklore, measurement. Topsail Traffic has logged live drive times across the Surf City bridge through the day since ${fmtDate(measured.firstAt)}: ${measured.samples.toLocaleString()} readings and counting. Here is what they say.`}
       />
 
       <section className={`${CARD} animate-fade-up`}>
@@ -160,8 +207,7 @@ export default function BestTimePage() {
         <ul className="mt-3 space-y-2.5 text-[15px] leading-relaxed text-slate-600 dark:text-slate-300">
           <li>
             <span className="font-medium text-slate-800 dark:text-slate-100">Cross before 9am or after 6pm.</span>{" "}
-            In every one of our readings so far, early and late crossings run about {base} minutes — even on July
-            Saturdays.
+            In our readings, early and late crossings usually run about {base} minutes, even on July Saturdays.
           </li>
           <li>
             <span className="font-medium text-slate-800 dark:text-slate-100">
@@ -180,41 +226,68 @@ export default function BestTimePage() {
           </li>
           <li>
             <span className="font-medium text-slate-800 dark:text-slate-100">Friday afternoon is sneaky.</span> The
-            worst weekday window we have measured is Friday around {hourLabel(friOut.hod)}, at {friOut.min} minutes —
-            weekend arrivals meet local rush hour.
+            worst weekday window we have measured is Friday around {hourLabel(friOut.hod)}, at {friOut.min} minutes,
+            when weekend arrivals meet local rush hour.
           </li>
         </ul>
+      </section>
+
+      <section className="animate-fade-up pt-8" style={{ animationDelay: "60ms" }}>
+        <h2 className={H2}>When to cross, day by day</h2>
+        <div className="mt-4 overflow-x-auto">
+          <table className="w-full min-w-[520px] text-left text-sm">
+            <thead>
+              <tr className="text-[11px] uppercase tracking-[0.08em] text-slate-500 dark:text-slate-400">
+                <th className="pb-2 pr-3 font-medium">Day</th>
+                <th className="pb-2 pr-3 font-medium">Leaving the island</th>
+                <th className="pb-2 font-medium">Getting to the island</th>
+              </tr>
+            </thead>
+            <tbody className="align-top text-slate-600 dark:text-slate-300">
+              {CROSS_BY_ROWS.map((r) => (
+                <tr key={r.label} className="border-t border-slate-200/70 dark:border-white/10">
+                  <th className="py-2.5 pr-3 font-medium text-slate-800 dark:text-slate-100">{r.label}</th>
+                  <td className="py-2.5 pr-3">{crossBy(out, r.days, base)}</td>
+                  <td className="py-2.5">{crossBy(back, r.days, base)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
+          Busy means more than 3 minutes over the usual {base}-minute crossing, from the medians below.
+        </p>
       </section>
 
       <section className="animate-fade-up py-8" style={{ animationDelay: "80ms" }}>
         <h2 className={H2}>What the data says, hour by hour</h2>
         <p className={PROSE}>
-          Median minutes on our benchmark route — Surf City to Hampstead, about five miles across the bridge — from
-          live readings taken every half hour. Green is a free-flowing crossing; red is roughly double that.
+          Median minutes on our benchmark route (Surf City to Hampstead, about five miles across the bridge) from
+          live readings taken through the day. Green is a free-flowing crossing; red is roughly double that.
         </p>
         <div className="mt-5 space-y-7">
           <HeatTable grid={out} title="Leaving the island" subtitle="Surf City → Hampstead" />
           <HeatTable grid={back} title="Getting to the island" subtitle="Hampstead → Surf City" />
         </div>
         <p className="mt-3 text-xs text-slate-400">
-          Medians of {measured.samples.toLocaleString()} live readings, {fmtDate(measured.firstAt)} –{" "}
-          {fmtDate(measured.lastAt)}. Blank cells: no reading logged yet for that hour.
+          Medians of {measured.samples.toLocaleString()} live readings, {fmtDate(measured.firstAt)} to{" "}
+          {fmtDate(measured.lastAt)}. Hover a cell for its reading count. Blank cells: no reading logged yet for that hour.
         </p>
       </section>
 
       <section className="animate-fade-up pb-8" style={{ animationDelay: "120ms" }}>
         <h2 className={H2}>Why Saturday is different</h2>
         <p className={PROSE}>
-          Most Topsail Island vacation rentals run Saturday to Saturday: check-out by 10am, check-in at 4pm. That
-          sends one wave off the island in the morning and another onto it in the afternoon — and in between,
+          Many Topsail Island vacation rentals run Saturday to Saturday, with morning check-out and afternoon check-in.
+          That sends one wave off the island in the morning and another onto it in the afternoon, and in between,
           summer day-trippers keep the corridor moving slowly in both directions. In our measurements, Saturday
           crossings stay elevated from about 9am to 6pm either way. It is heavy enough that Surf City and Topsail
           Beach staff a joint traffic-management program on summer weekends. Sunday afternoon (peaking around{" "}
           {sunOut.min} minutes at {hourLabel(sunOut.hod)}) catches the weekenders heading home.
         </p>
         <p className={PROSE}>
-          The bridge itself is no longer the bottleneck. The old Surf City swing bridge — which stopped traffic on
-          the hour for boats — was replaced in 2018 by a fixed high-rise span. What is left is simple volume: a
+          The bridge itself is no longer the bottleneck. The old Surf City swing bridge, which stopped traffic on
+          the hour for boats, was replaced in 2018 by a fixed high-rise span. What is left is simple volume: a
           barrier island with two access points, and most traffic using this one. The pinch points now are the
           roundabout on the island side and the NC-210/NC-50 junction on the mainland. Curious about the old bridge?{" "}
           <Link href="/swing-bridge-history" className="text-sky-700 hover:underline dark:text-sky-400">
@@ -235,8 +308,8 @@ export default function BestTimePage() {
       <section className={`${CARD} animate-fade-up`} style={{ animationDelay: "160ms" }}>
         <h2 className={H2}>Check the live number before you load the car</h2>
         <p className={PROSE}>
-          These tables are the rhythm; the live tool is the moment. Set your route once and Topsail Traffic shows
-          the crossing time right now, a three-hour forecast, and the best window to go.
+          These tables are the rhythm; the live tool is the moment. Topsail Traffic shows the crossing time right
+          now, a three-hour forecast, and the best window to go. Set your own route for door-to-door times.
         </p>
         <div className="mt-4 flex flex-wrap gap-3">
           <Link
@@ -266,7 +339,7 @@ export default function BestTimePage() {
         </dl>
       </section>
 
-      <TipJar />
+      <TipJar source="best-time" />
 
       <script
         type="application/ld+json"

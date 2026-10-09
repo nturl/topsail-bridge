@@ -1,8 +1,11 @@
 name: poll-traffic
 
 on:
+  # GitHub delays and drops scheduled runs, worst at the top of the hour; this
+  # asked for every 30 min and got ~4 runs a day. Asking every 15 min, off the
+  # :00/:30 rush, gets more through; poll.mjs keeps one reading per ~30 min.
   schedule:
-    - cron: "*/30 * * * *"
+    - cron: "4,19,34,49 * * * *"
   workflow_dispatch: {}
 
 concurrency:

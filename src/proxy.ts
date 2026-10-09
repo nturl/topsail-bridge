@@ -10,7 +10,7 @@ function allowedHost(host: string): boolean {
   return ALLOWED_HOSTS.has(host) || host.endsWith(".vercel.app") || host === "localhost" || host.startsWith("localhost:");
 }
 
-export function middleware(req: NextRequest) {
+export function proxy(req: NextRequest) {
   const site = req.headers.get("sec-fetch-site");
   if (site === "cross-site") return new NextResponse(null, { status: 403 });
   for (const header of ["origin", "referer"]) {

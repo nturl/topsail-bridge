@@ -39,12 +39,16 @@ function lastMondayOfMay(y: number): number {
   for (let d = 31; d >= 25; d--) if (dowOf(y, 5, d) === 1) return d;
   return 25;
 }
+function fourthThursdayOfNovember(y: number): number {
+  for (let d = 22; d <= 28; d++) if (dowOf(y, 11, d) === 4) return d;
+  return 22;
+}
 function firstMondayOfSeptember(y: number): number {
   for (let d = 1; d <= 7; d++) if (dowOf(y, 9, d) === 1) return d;
   return 1;
 }
 
-// The island's three traffic holidays. Long weekends run Friday through the
+// The island's traffic holidays. Long weekends run Friday through the
 // Monday itself; July 4th gets the whole surrounding week.
 function holidayContext({ y, m, d }: YMD): DayContext | null {
   const day = serialDay(y, m, d);
@@ -71,6 +75,13 @@ function holidayContext({ y, m, d }: YMD): DayContext | null {
       note: "Labor Day weekend, the season closer. Heavy beach traffic through Monday evening.",
       turnover: true,
     };
+  const thanksgiving = serialDay(y, 11, fourthThursdayOfNovember(y));
+  if (day >= thanksgiving - 1 && day <= thanksgiving + 3)
+    return {
+      tag: "Thanksgiving weekend",
+      note: "Thanksgiving weekend brings holiday visitors, so afternoons run busier than a usual fall weekend.",
+      turnover: false,
+    };
   return null;
 }
 
@@ -81,7 +92,8 @@ export function dayContext(date: Date = new Date()): DayContext | null {
 
   const { wd, m } = ymd;
   const summer = m >= 5 && m <= 9;
-  if (wd === "Sat")
+  // Changeover snarls the bridge spring through fall; winter rentals are few.
+  if (wd === "Sat" && m >= 3 && m <= 11)
     return {
       tag: "Sat · turnover day",
       note: "Saturday is rental changeover, the island's busiest day. Worst late morning to mid-afternoon.",

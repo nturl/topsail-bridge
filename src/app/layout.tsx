@@ -4,6 +4,7 @@ import Script from "next/script";
 import "./globals.css";
 import { ServiceWorkerRegister } from "@/components/ServiceWorkerRegister";
 import { SiteFooter } from "@/components/SiteFooter";
+import { SiteNav } from "@/components/SiteNav";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -28,8 +29,9 @@ export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
   title: "Topsail Traffic | Surf City Bridge Live Traffic & Cam",
   description:
-    "When to leave (and return to) Topsail Island, NC. Live and predicted drive times across the Surf City bridge, the live bridge cam, a 7-day trip planner, tides, and NCDOT alerts. Free, no ads.",
+    "When to leave (and return to) Topsail Island, NC. Live and predicted drive times across the Surf City bridge, live traffic cams on every approach, a 7-day trip planner, rip current risk, tides, and NCDOT alerts. Free, no ads.",
   applicationName: "Topsail Traffic",
+  alternates: { canonical: "/" },
   appleWebApp: {
     capable: true,
     title: "Topsail Traffic",
@@ -72,7 +74,6 @@ export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   viewportFit: "cover",
-  userScalable: false,
 };
 
 export default function RootLayout({
@@ -86,7 +87,7 @@ export default function RootLayout({
       className={`${geistSans.variable} ${geistMono.variable} ${instrumentSerif.variable} h-full antialiased`}
     >
       <body
-        className="min-h-full text-slate-900 dark:text-slate-100"
+        className="min-h-full pb-[calc(52px+env(safe-area-inset-bottom,0px))] text-slate-900 md:pb-0 dark:text-slate-100"
         style={{
           paddingTop: "env(safe-area-inset-top, 0px)",
           paddingLeft: "env(safe-area-inset-left, 0px)",
@@ -95,6 +96,7 @@ export default function RootLayout({
       >
         {children}
         <SiteFooter />
+        <SiteNav />
         <ServiceWorkerRegister />
         {/* Web Analytics via the documented manual snippet: the component's
             client-side script injection was losing its tag to head

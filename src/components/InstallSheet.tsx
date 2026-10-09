@@ -9,12 +9,43 @@ type InstallPromptEvent = Event & {
   userChoice: Promise<{ outcome: "accepted" | "dismissed" }>;
 };
 
-function ShareIcon() {
+// Where the visitor is, which decides the steps we can honestly show.
+// - ios-safari: Share > Add to Home Screen (Apple's iPhone User Guide, iOS 26/27).
+// - ios-other: Chrome, Firefox, Edge on iOS. Since iOS 16.4 third-party browsers
+//   *can* offer Add to Home Screen in their Share menu (WebKit, Safari 16.4
+//   notes), so point there, with Safari as the fallback.
+// - in-app: Facebook, Instagram, TikTok and similar webviews have no way to
+//   install, so the only useful step is getting out to a real browser.
+type Platform = "ios-safari" | "ios-other" | "android" | "in-app" | "desktop";
+
+const IN_APP = /FBAN|FBAV|FB_IAB|FBIOS|Instagram|Messenger|Snapchat|musical_ly|BytedanceWebview|TikTok|LinkedInApp|Pinterest|Line\/|GSA\/|; wv\)/;
+const IOS_OTHER = /CriOS|FxiOS|EdgiOS|OPiOS|DuckDuckGo/;
+
+function detect(): { platform: Platform; ios: boolean } {
+  const ua = navigator.userAgent;
+  // iPadOS 13+ reports itself as a Mac; touch support gives it away.
+  const ios = /iPad|iPhone|iPod/.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1);
+  if (IN_APP.test(ua)) return { platform: "in-app", ios };
+  if (ios) return { platform: IOS_OTHER.test(ua) ? "ios-other" : "ios-safari", ios };
+  if (/Android/.test(ua)) return { platform: "android", ios };
+  return { platform: "desktop", ios };
+}
+
+function ShareIcon({ size = 18 }: { size?: number }) {
   return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       <path d="M12 3v12" />
       <path d="m8 7 4-4 4 4" />
       <path d="M5 11v8a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-8" />
+    </svg>
+  );
+}
+
+// Safari 26's Page Menu button: three lines, the last one short.
+function PageMenuIcon({ size = 18 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
+      <path d="M4 6.5h16M4 12h16M4 17.5h9" />
     </svg>
   );
 }
@@ -28,15 +59,17 @@ function AddSquareIcon() {
   );
 }
 
+const INLINE_ICON = "mx-0.5 inline-block -translate-y-px align-middle text-sky-700 dark:text-sky-400";
+
 /* Depersonalized mockups of the three iOS moments, drawn in the app's own style. */
 
 function BrowserBarMock() {
   return (
-    <div className="flex items-center justify-between rounded-2xl border border-slate-200 bg-white py-2 pl-4 pr-2 dark:border-slate-700 dark:bg-slate-800">
-      <span className="text-xs text-slate-400">topsailtraffic.com</span>
+    <div className="flex items-center gap-2 rounded-full border border-slate-200 bg-white py-1.5 pl-1.5 pr-4 dark:border-slate-700 dark:bg-slate-800">
       <span className="grid h-8 w-8 place-items-center rounded-full bg-sky-100 text-sky-700 ring-2 ring-sky-500 dark:bg-sky-500/15 dark:text-sky-400">
-        <ShareIcon />
+        <PageMenuIcon />
       </span>
+      <span className="flex-1 text-center text-xs text-slate-400">topsailtraffic.com</span>
     </div>
   );
 }
@@ -60,19 +93,27 @@ function ShareMenuMock() {
 
 function AddDialogMock() {
   return (
-    <div className="flex items-center justify-between rounded-2xl border border-slate-200 bg-white px-4 py-2.5 dark:border-slate-700 dark:bg-slate-800">
-      <div className="flex items-center gap-3">
-        <span
-          className="grid h-10 w-10 shrink-0 place-items-center rounded-[10px]"
-          style={{ background: "linear-gradient(155deg,#7dd3fc,#0369a1)" }}
-        >
-          <span className="flex h-[22px] w-[34px] items-center justify-center rounded-[50%] border-2 border-slate-900 bg-white text-[10px] font-extrabold text-slate-900">
-            TI
+    <div className="rounded-2xl border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-800">
+      <div className="flex items-center justify-between px-4 py-2.5">
+        <div className="flex items-center gap-3">
+          <span
+            className="grid h-10 w-10 shrink-0 place-items-center rounded-[10px]"
+            style={{ background: "linear-gradient(155deg,#7dd3fc,#0369a1)" }}
+          >
+            <span className="flex h-[22px] w-[34px] items-center justify-center rounded-[50%] border-2 border-slate-900 bg-white text-[10px] font-extrabold text-slate-900">
+              TI
+            </span>
           </span>
-        </span>
-        <span className="text-sm font-medium text-slate-800 dark:text-slate-100">Topsail Traffic</span>
+          <span className="text-sm font-medium text-slate-800 dark:text-slate-100">Topsail Traffic</span>
+        </div>
+        <span className="rounded-full bg-sky-600 px-3.5 py-1 text-xs font-semibold text-white">Add</span>
       </div>
-      <span className="rounded-full bg-sky-600 px-3.5 py-1 text-xs font-semibold text-white">Add</span>
+      <div className="flex items-center justify-between border-t border-slate-100 px-4 py-2 dark:border-slate-700">
+        <span className="text-[13px] text-slate-600 dark:text-slate-300">Open as Web App</span>
+        <span className="flex h-5 w-8 items-center justify-end rounded-full bg-emerald-500 p-0.5" aria-hidden>
+          <span className="h-4 w-4 rounded-full bg-white shadow" />
+        </span>
+      </div>
     </div>
   );
 }
@@ -88,14 +129,33 @@ function StepCaption({ n, children }: { n: number; children: React.ReactNode }) 
   );
 }
 
+function TextSteps({ steps }: { steps: React.ReactNode[] }) {
+  return (
+    <ol className="space-y-2">
+      {steps.map((s, i) => (
+        <li key={i}>
+          <StepCaption n={i + 1}>{s}</StepCaption>
+        </li>
+      ))}
+    </ol>
+  );
+}
+
+const BODY = "text-sm leading-snug text-slate-700 dark:text-slate-200";
+const PRIMARY_BTN = "pressable w-full rounded-xl bg-sky-600 py-2.5 text-sm font-medium text-white hover:bg-sky-700";
+
 export function InstallSheet({ open, onClose }: { open: boolean; onClose: () => void }) {
   const [installEvent, setInstallEvent] = useState<InstallPromptEvent | null>(null);
+  const [platform, setPlatform] = useState<Platform>("desktop");
   const [ios, setIos] = useState(false);
   const [installed, setInstalled] = useState(false);
   const [shareLabel, setShareLabel] = useState("Share it with a friend");
+  const [copyLabel, setCopyLabel] = useState("Copy link");
 
   useEffect(() => {
-    setIos(/iPad|iPhone|iPod/.test(navigator.userAgent));
+    const d = detect();
+    setPlatform(d.platform);
+    setIos(d.ios);
     setInstalled(
       window.matchMedia?.("(display-mode: standalone)").matches ||
         (navigator as Navigator & { standalone?: boolean }).standalone === true,
@@ -104,11 +164,164 @@ export function InstallSheet({ open, onClose }: { open: boolean; onClose: () => 
       e.preventDefault();
       setInstallEvent(e as InstallPromptEvent);
     };
+    const onInstalled = () => {
+      setInstalled(true);
+      setInstallEvent(null);
+    };
     window.addEventListener("beforeinstallprompt", onPrompt);
-    return () => window.removeEventListener("beforeinstallprompt", onPrompt);
+    window.addEventListener("appinstalled", onInstalled);
+    return () => {
+      window.removeEventListener("beforeinstallprompt", onPrompt);
+      window.removeEventListener("appinstalled", onInstalled);
+    };
   }, []);
 
   if (!open) return null;
+
+  async function copyLink() {
+    try {
+      await navigator.clipboard.writeText(window.location.href);
+      setCopyLabel("Copied. Paste it in your browser");
+    } catch {
+      setCopyLabel("Press and hold the address to copy it");
+    }
+    setTimeout(() => setCopyLabel("Copy link"), 3000);
+  }
+
+  let body: React.ReactNode;
+  if (installed) {
+    body = (
+      <p className={BODY}>
+        You already have it. Topsail Traffic is on your home screen and opens full-screen like an app.
+      </p>
+    );
+  } else if (installEvent) {
+    body = (
+      <div className="space-y-3">
+        <p className={BODY}>One tap puts Topsail Traffic on your home screen.</p>
+        <button
+          onClick={async () => {
+            await installEvent.prompt();
+            const { outcome } = await installEvent.userChoice;
+            // The event is single-use. If they said no, the menu steps below
+            // the button take over; if yes, appinstalled flips us to "installed".
+            setInstallEvent(null);
+            if (outcome === "accepted") onClose();
+          }}
+          className={PRIMARY_BTN}
+        >
+          Install Topsail Traffic
+        </button>
+      </div>
+    );
+  } else if (platform === "in-app") {
+    const browser = ios ? "Safari" : "Chrome";
+    body = (
+      <div className="space-y-3">
+        <p className={BODY}>
+          This app&rsquo;s built-in browser can&rsquo;t add Topsail Traffic to your home screen. Open it in {browser}{" "}
+          first:
+        </p>
+        <TextSteps
+          steps={[
+            <>
+              Tap the <span className="font-semibold">&middot;&middot;&middot;</span> or
+              <span className={INLINE_ICON}>
+                <ShareIcon size={14} />
+              </span>
+              menu in this app
+            </>,
+            <>
+              Choose <span className="font-semibold">Open in browser</span> (or Open in {browser})
+            </>,
+            <>
+              Tap <span className="font-semibold">Get the app</span> again there
+            </>,
+          ]}
+        />
+        <button onClick={copyLink} className={PRIMARY_BTN}>
+          {copyLabel}
+        </button>
+      </div>
+    );
+  } else if (platform === "ios-safari") {
+    body = (
+      <ol className="space-y-4">
+        <li>
+          <StepCaption n={1}>
+            Tap
+            <span className={INLINE_ICON}>
+              <PageMenuIcon size={15} />
+            </span>
+            by the address, then <span className="font-semibold">Share</span>
+          </StepCaption>
+          <BrowserBarMock />
+          <p className="mt-1.5 text-xs text-slate-400">
+            See a
+            <span className={INLINE_ICON}>
+              <ShareIcon size={13} />
+            </span>
+            button instead? Tap that.
+          </p>
+        </li>
+        <li>
+          <StepCaption n={2}>
+            Scroll down, tap <span className="font-semibold">Add to Home Screen</span>
+          </StepCaption>
+          <ShareMenuMock />
+        </li>
+        <li>
+          <StepCaption n={3}>
+            Leave <span className="font-semibold">Open as Web App</span> on, tap{" "}
+            <span className="font-semibold">Add</span>
+          </StepCaption>
+          <AddDialogMock />
+        </li>
+      </ol>
+    );
+  } else if (platform === "ios-other") {
+    body = (
+      <div className="space-y-3">
+        <TextSteps
+          steps={[
+            <>
+              Tap <span className="font-semibold">Share</span>{" "}in your browser&rsquo;s toolbar or menu
+            </>,
+            <>
+              Tap <span className="font-semibold">Add to Home Screen</span>, then <span className="font-semibold">Add</span>
+            </>,
+          ]}
+        />
+        <p className="text-xs leading-relaxed text-slate-400">
+          Not in the list? Open this page in Safari and tap Get the app there.
+        </p>
+      </div>
+    );
+  } else if (platform === "android") {
+    body = (
+      <TextSteps
+        steps={[
+          <>
+            Open your browser menu (<span className="font-semibold">&#8942;</span> in Chrome)
+          </>,
+          <>
+            Tap <span className="font-semibold">Add to home screen</span> or{" "}
+            <span className="font-semibold">Install app</span>
+          </>,
+          <>
+            Tap <span className="font-semibold">Install</span>
+          </>,
+        ]}
+      />
+    );
+  } else {
+    body = (
+      <p className={BODY}>
+        It&rsquo;s made for your phone. Open <span className="font-semibold">topsailtraffic.com</span> in Safari on
+        iPhone or Chrome on Android, then tap <span className="font-semibold">Get the app</span>.
+      </p>
+    );
+  }
 
   return (
     <div
@@ -116,71 +329,28 @@ export function InstallSheet({ open, onClose }: { open: boolean; onClose: () => 
       onClick={onClose}
     >
       <div
-        className="animate-sheet-up w-full max-w-md rounded-t-3xl bg-white p-5 shadow-xl dark:bg-slate-900 sm:rounded-3xl"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="install-title"
+        className="animate-sheet-up max-h-[92dvh] w-full max-w-md overflow-y-auto rounded-t-3xl bg-white p-5 shadow-xl dark:bg-slate-900 sm:rounded-3xl"
         style={{ paddingBottom: "calc(1.25rem + env(safe-area-inset-bottom, 0px))" }}
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="mb-4 flex items-center justify-between">
-          <h2 className="font-serif text-2xl">Get the app</h2>
+        <div className="mb-1 flex items-center justify-between">
+          <h2 id="install-title" className="font-serif text-2xl">
+            Get the app
+          </h2>
           <button onClick={onClose} aria-label="Close" className="text-lg text-slate-400 hover:text-slate-600">
             ✕
           </button>
         </div>
-
-        {installed ? (
-          <p className="text-sm leading-relaxed text-slate-700 dark:text-slate-200">
-            You already have it. Topsail Traffic is on your home screen and opens full-screen like an app.
+        {!installed && (
+          <p className="mb-4 text-[13px] leading-snug text-slate-500 dark:text-slate-400">
+            Opens full-screen, straight to your drive time, and still opens on a weak signal. Free, no app store.
           </p>
-        ) : installEvent ? (
-          <div className="space-y-3">
-            <p className="text-sm leading-snug text-slate-700 dark:text-slate-200">
-              One tap puts Topsail Traffic on your home screen. It opens full-screen, like an app.
-            </p>
-            <button
-              onClick={async () => {
-                await installEvent.prompt();
-                onClose();
-              }}
-              className="pressable w-full rounded-xl bg-sky-600 py-2.5 text-sm font-medium text-white hover:bg-sky-700"
-            >
-              Install Topsail Traffic
-            </button>
-          </div>
-        ) : (
-          <div>
-            {!ios && (
-              <p className="mb-3 text-sm leading-snug text-slate-700 dark:text-slate-200">
-                On your phone, open <span className="font-semibold">topsailtraffic.com</span>, then:
-              </p>
-            )}
-            <ol className="space-y-4">
-              <li>
-                <StepCaption n={1}>
-                  Tap <span className="font-semibold">Share</span> in Safari (or whichever browser you use)
-                </StepCaption>
-                <BrowserBarMock />
-              </li>
-              <li>
-                <StepCaption n={2}>
-                  Scroll down, tap <span className="font-semibold">Add to Home Screen</span>
-                </StepCaption>
-                <ShareMenuMock />
-              </li>
-              <li>
-                <StepCaption n={3}>
-                  Tap <span className="font-semibold">Add</span>
-                </StepCaption>
-                <AddDialogMock />
-              </li>
-            </ol>
-            {!ios && (
-              <p className="mt-3 text-xs leading-relaxed text-slate-400">
-                On Android it&rsquo;s one tap: choose <span className="font-medium">Install</span> from the browser
-                menu.
-              </p>
-            )}
-          </div>
         )}
+
+        {body}
 
         <button
           onClick={async () => {
@@ -194,10 +364,6 @@ export function InstallSheet({ open, onClose }: { open: boolean; onClose: () => 
           <ShareIcon />
           {shareLabel}
         </button>
-
-        <p className="mt-3 text-center text-[11px] text-slate-400">
-          No app store, nothing to download. It&rsquo;s free.
-        </p>
       </div>
     </div>
   );

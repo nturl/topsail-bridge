@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import type { Incident, Sun, TideEvent } from "@/lib/types";
+import type { Beach, Incident, StormWatch, Sun, TideEvent, WeatherAlert } from "@/lib/types";
 
 // Richer incidents come from the keyed DriveNC event feed; if no key (or it
 // fails) we fall back to the keyless WZDx work-zone feed.
@@ -10,7 +10,7 @@ const WZDX = "https://www.drivenc.gov/api/wzdx";
 // Corridor box: Topsail Beach <-> Surf City bridge <-> Hampstead.
 const BBOX = { minLng: -77.72, maxLng: -77.52, minLat: 34.34, maxLat: 34.47 };
 
-type Weather = { tempF: number; precipIn: number; code: number; windMph: number } | null;
+type Weather = { tempF: number; precipIn: number; code: number; windMph: number; gustMph: number } | null;
 
 function inBox(lng: number, lat: number): boolean {
   return lng >= BBOX.minLng && lng <= BBOX.maxLng && lat >= BBOX.minLat && lat <= BBOX.maxLat;
@@ -119,7 +119,7 @@ function windowLabel(startSec: number, endSec?: number): string {
 async function driveNCIncidents(): Promise<Incident[] | null> {
   if (!EVENTS_URL) return null;
   try {
-    const r = await fetch(EVENTS_URL, { next: { revalidate: 300 } });
+    const r = await fetch(EVENTS_URL, { next: { revalidate: 300 }, signal: AbortSignal.timeout(5000) });
     if (!r.ok) return null;
     const arr = await r.json();
     if (!Array.isArray(arr)) return null;
@@ -177,10 +177,11 @@ function coordsOf(g: Geo): [number, number][] {
   return [];
 }
 
-async function wzdxIncidents(): Promise<Incident[]> {
+// Null (not []) on failure, so a dead feed can't pass for a clear road.
+async function wzdxIncidents(): Promise<Incident[] | null> {
   try {
-    const r = await fetch(WZDX, { next: { revalidate: 300 } });
-    if (!r.ok) return [];
+    const r = await fetch(WZDX, { next: { revalidate: 300 }, signal: AbortSignal.timeout(5000) });
+    if (!r.ok) return null;
     const j = (await r.json()) as { features?: unknown[] };
     const seen = new Map<string, Incident>();
     for (const f of j.features ?? []) {
@@ -213,7 +214,7 @@ async function wzdxIncidents(): Promise<Incident[]> {
     }
     return [...seen.values()];
   } catch {
-    return [];
+    return null;
   }
 }
 
@@ -248,7 +249,7 @@ async function getTides(): Promise<TideEvent[] | null> {
   try {
     const today = nyStamp().slice(0, 10).replaceAll("-", "");
     const url = `https://api.tidesandcurrents.noaa.gov/api/prod/datagetter?product=predictions&interval=hilo&datum=MLLW&station=${TIDE_STATION}&time_zone=lst_ldt&units=english&begin_date=${today}&range=36&format=json`;
-    const r = await fetch(url, { next: { revalidate: 3600 } });
+    const r = await fetch(url, { next: { revalidate: 3600 }, signal: AbortSignal.timeout(4000) });
     if (!r.ok) return null;
     const rows = ((await r.json()) as { predictions?: Array<{ t: string; type: string }> }).predictions ?? [];
     const now = nyStamp();
@@ -271,8 +272,8 @@ async function getTides(): Promise<TideEvent[] | null> {
 async function getWeatherSun(): Promise<{ weather: Weather; sun: Sun | null }> {
   try {
     const url =
-      "https://api.open-meteo.com/v1/forecast?latitude=34.43&longitude=-77.55&current=temperature_2m,precipitation,weather_code,wind_speed_10m&daily=sunrise,sunset&forecast_days=1&timezone=America%2FNew_York&temperature_unit=fahrenheit&wind_speed_unit=mph&precipitation_unit=inch";
-    const r = await fetch(url, { next: { revalidate: 600 } });
+      "https://api.open-meteo.com/v1/forecast?latitude=34.43&longitude=-77.55&current=temperature_2m,precipitation,weather_code,wind_speed_10m,wind_gusts_10m&daily=sunrise,sunset&forecast_days=1&timezone=America%2FNew_York&temperature_unit=fahrenheit&wind_speed_unit=mph&precipitation_unit=inch";
+    const r = await fetch(url, { next: { revalidate: 600 }, signal: AbortSignal.timeout(4000) });
     if (!r.ok) return { weather: null, sun: null };
     const j = (await r.json()) as {
       current?: Record<string, number>;
@@ -285,6 +286,7 @@ async function getWeatherSun(): Promise<{ weather: Weather; sun: Sun | null }> {
           precipIn: c.precipitation,
           code: c.weather_code,
           windMph: Math.round(c.wind_speed_10m),
+          gustMph: Math.round(c.wind_gusts_10m),
         }
       : null;
     const sunrise = j.daily?.sunrise?.[0];
@@ -297,13 +299,215 @@ async function getWeatherSun(): Promise<{ weather: Weather; sun: Sun | null }> {
   }
 }
 
+// --- NWS / NHC ---------------------------------------------------------------
+// api.weather.gov asks every client to identify itself.
+const NWS_HEADERS = { "User-Agent": "topsailtraffic.com", Accept: "application/geo+json" };
+
+// Coastal Pender (Surf City, Topsail Beach) and Coastal Onslow (North Topsail).
+const NWS_ZONES = "NCZ106,NCZ199";
+const STORM_EVENT = /hurricane|tropical storm|storm surge|extreme wind|evacuation/i;
+
+async function getAlerts(): Promise<WeatherAlert[]> {
+  try {
+    const r = await fetch(`https://api.weather.gov/alerts/active?zone=${NWS_ZONES}`, {
+      headers: NWS_HEADERS,
+      next: { revalidate: 300 },
+      signal: AbortSignal.timeout(4000),
+    });
+    if (!r.ok) return [];
+    type Props = Record<string, string | null> & { affectedZones?: string[] };
+    const j = (await r.json()) as { features?: { properties: Props }[] };
+    const now = Date.now() / 1000;
+    const byEvent = new Map<string, WeatherAlert>();
+    // When both offices issue the same alert, keep Surf City's own zone.
+    const surfCityFirst = [...(j.features ?? [])].sort(
+      (a, b) =>
+        Number(!!b.properties.affectedZones?.some((z) => z.endsWith("NCZ106"))) -
+        Number(!!a.properties.affectedZones?.some((z) => z.endsWith("NCZ106"))),
+    );
+    for (const f of surfCityFirst) {
+      const p = f.properties;
+      const event = p.event ?? "";
+      // Both zones usually carry the same alert from two NWS offices.
+      if (!event || byEvent.has(event) || p.status !== "Actual") continue;
+      const start = Date.parse(p.onset ?? p.effective ?? "") / 1000;
+      const end = Date.parse(p.ends ?? p.expires ?? "") / 1000;
+      if (Number.isFinite(end) && end < now) continue;
+      const window =
+        Number.isFinite(start) && start > now
+          ? windowLabel(start, Number.isFinite(end) ? end : undefined)
+          : Number.isFinite(end)
+            ? `until ${windowLabel(end)}`
+            : "in effect";
+      byEvent.set(event, {
+        id: String(p.id ?? event),
+        event,
+        severity: p.severity ?? "Unknown",
+        window,
+        storm: STORM_EVENT.test(event),
+        warning: /warning|emergency/i.test(event),
+      });
+    }
+    // Storm-level first, then warnings, then watches and advisories.
+    return [...byEvent.values()].sort(
+      (a, b) => Number(b.storm) - Number(a.storm) || Number(b.warning) - Number(a.warning),
+    );
+  } catch {
+    return [];
+  }
+}
+
+type RipRisk = Beach["rip"];
+function ripOf(s: string | undefined): RipRisk | null {
+  const m = s?.match(/\b(Low|Moderate|High)\b/i);
+  if (!m) return null;
+  return (m[1][0].toUpperCase() + m[1].slice(1).toLowerCase()) as RipRisk;
+}
+
+function periodName(raw: string): string {
+  const name = raw.trim().toLowerCase();
+  if (name === "rest of today" || name === "today") return "Today";
+  return name.replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+// NWS Wilmington's Surf Zone Forecast is plain text. The Coastal Pender block
+// runs from "NCZ106-" to "$$"; each period starts on a ".NAME..." line.
+async function getBeach(): Promise<Beach | null> {
+  try {
+    const r = await fetch("https://api.weather.gov/products/types/SRF/locations/ILM/latest", {
+      headers: NWS_HEADERS,
+      next: { revalidate: 1800 },
+      signal: AbortSignal.timeout(4000),
+    });
+    if (!r.ok) return null;
+    const j = (await r.json()) as { issuanceTime?: string; productText?: string };
+    // Only today's issue: the periods are relative to the day it was written,
+    // and the forecast stops being issued after beach season.
+    const issued = j.issuanceTime ? new Date(j.issuanceTime) : null;
+    const dayKey = (d: Date) =>
+      new Intl.DateTimeFormat("en-CA", { timeZone: "America/New_York", dateStyle: "short" }).format(d);
+    if (!issued || dayKey(issued) !== dayKey(new Date())) return null;
+
+    const text = j.productText ?? "";
+    const start = text.indexOf("NCZ106-");
+    if (start < 0) return null;
+    const end = text.indexOf("$$", start);
+    const block = text.slice(start, end < 0 ? undefined : end);
+    const periods = block
+      .split(/^\./m)
+      .slice(1)
+      .map((chunk) => {
+        const i = chunk.indexOf("...");
+        return { name: chunk.slice(0, i), body: chunk.slice(i + 3) };
+      })
+      .filter((p) => p.name && p.name.trim() !== "EXTENDED");
+    const [first, second] = periods;
+    if (!first) return null;
+    const rip = ripOf(first.body.match(/Rip Current Risk\*?\.*\s*(\w+)/i)?.[1]);
+    if (!rip) return null;
+    const line = (label: string) =>
+      first.body.match(new RegExp(`${label}\\.*\\s*([^\\n]+?)\\.\\s*$`, "im"))?.[1]?.trim() ?? null;
+    const nextRip = second
+      ? ripOf(second.body.match(/Rip Current Risk\*?\.*\s*(\w+)/i)?.[1] ?? second.body.match(/(\w+) rip current risk/i)?.[1])
+      : null;
+    return {
+      rip,
+      surf: line("Surf Height"),
+      water: line("Water Temperature")?.replace(/^in the\s+/i, "") ?? null,
+      next: second && nextRip ? { label: periodName(second.name), rip: nextRip } : null,
+    };
+  } catch {
+    return null;
+  }
+}
+
+const NHC_KIND: Record<string, string> = {
+  HU: "Hurricane",
+  TS: "Tropical Storm",
+  TD: "Tropical Depression",
+  STS: "Subtropical Storm",
+  SD: "Subtropical Depression",
+  PTC: "Potential Tropical Cyclone",
+};
+
+function milesFromBridge(lat: number, lng: number): number {
+  const R = 3958.8;
+  const rad = Math.PI / 180;
+  const [lat1, lng1] = [34.43 * rad, -77.55 * rad];
+  const dLat = lat * rad - lat1;
+  const dLng = lng * rad - lng1;
+  const h = Math.sin(dLat / 2) ** 2 + Math.cos(lat1) * Math.cos(lat * rad) * Math.sin(dLng / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(h));
+}
+
+// Atlantic storms within ~600 miles: early enough to matter, far enough out
+// that a Gulf storm heading for Texas doesn't put a banner on the island.
+async function getStorms(): Promise<StormWatch[]> {
+  try {
+    const r = await fetch("https://www.nhc.noaa.gov/CurrentStorms.json", {
+      next: { revalidate: 900 },
+      signal: AbortSignal.timeout(4000),
+    });
+    if (!r.ok) return [];
+    const j = (await r.json()) as {
+      activeStorms?: {
+        id: string;
+        name: string;
+        classification: string;
+        latitudeNumeric: number;
+        longitudeNumeric: number;
+        publicAdvisory?: { url?: string };
+      }[];
+    };
+    return (j.activeStorms ?? [])
+      .filter((s) => s.id.startsWith("al"))
+      .map((s) => ({
+        name: s.name,
+        kind: NHC_KIND[s.classification] ?? "Storm",
+        miles: Math.round(milesFromBridge(s.latitudeNumeric, s.longitudeNumeric)),
+        url: s.publicAdvisory?.url ?? "https://www.nhc.noaa.gov/",
+      }))
+      .filter((s) => s.miles <= 600)
+      .sort((a, b) => a.miles - b.miles);
+  } catch {
+    return [];
+  }
+}
+
 export async function GET() {
-  const [dnc, ws, tides] = await Promise.all([driveNCIncidents(), getWeatherSun(), getTides()]);
+  const [dnc, ws, tides, alerts, beach, storms] = await Promise.all([
+    driveNCIncidents(),
+    getWeatherSun(),
+    getTides(),
+    getAlerts(),
+    getBeach(),
+    getStorms(),
+  ]);
   const all = dnc ?? (await wzdxIncidents());
-  const incidents = all.slice(0, 8);
-  const omitted = Math.max(0, all.length - incidents.length);
+  const incidents = (all ?? []).slice(0, 8);
+  const omitted = Math.max(0, (all?.length ?? 0) - incidents.length);
+  // Both incident feeds down: tell the UI, and don't hold the gap for long.
+  const incidentsDown = all == null;
   return NextResponse.json(
-    { incidents, omitted, weather: ws.weather, sun: ws.sun, tides, source: dnc ? "drivenc" : "wzdx" },
-    { headers: { "Cache-Control": "public, s-maxage=300, stale-while-revalidate=900" } },
+    {
+      incidents,
+      omitted,
+      weather: ws.weather,
+      sun: ws.sun,
+      tides,
+      alerts,
+      beach,
+      storms,
+      incidentsDown,
+      source: dnc ? "drivenc" : "wzdx",
+    },
+    {
+      headers: {
+        // A closure alert shouldn't sit behind a 15-minute-old cache entry.
+        "Cache-Control": incidentsDown
+          ? "public, s-maxage=60"
+          : "public, s-maxage=300, stale-while-revalidate=120",
+      },
+    },
   );
 }

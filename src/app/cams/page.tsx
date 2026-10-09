@@ -8,13 +8,13 @@ import { ISLAND_CAMERA_MODE } from "@/lib/camera-config";
 const ISLAND_CAM_EMBEDDED = ISLAND_CAMERA_MODE !== "link";
 
 export const metadata: Metadata = {
-  title: "Surf City Bridge Cam & Topsail Island Traffic Cameras — Live",
+  title: "Topsail Island Traffic Cameras & Surf City Bridge Cam (Live)",
   description: ISLAND_CAM_EMBEDDED
     ? "Live island-side and NCDOT traffic cameras on the routes to Topsail Island. Free, no sign-up."
     : "Live NCDOT traffic cameras on the routes to Topsail Island, plus a direct link to Surfchex's Surf City bridge roundabout cam. Free, no sign-up.",
   alternates: { canonical: "/cams" },
   openGraph: {
-    title: "Topsail Island traffic cams — live",
+    title: "Topsail Island traffic cams, live",
     description: ISLAND_CAM_EMBEDDED
       ? "Live island-side and NCDOT cameras on the way to Topsail Island."
       : "Live NCDOT cameras on the way to Topsail Island, plus the Surf City bridge cam on Surfchex.",
@@ -30,12 +30,12 @@ const PROSE = "mt-2 text-[15px] leading-relaxed text-slate-600 dark:text-slate-3
 
 const CAM_NOTES = [
   {
-    name: "Surf City (NC-50/210 on the mainland)",
-    body: "The closest camera to the bridge: the run of lights on the Surf City mainland that every car funnels through before the climb. If this is backed up, so is the bridge.",
+    name: "Roland Ave at JH Batts Rd",
+    body: "The closest camera to the bridge, on the mainland stretch of NC-50/210 that every car funnels through before the climb. If this is backed up, so is the bridge.",
   },
   {
-    name: "NC-210 at JH Batts Rd",
-    body: "NCDOT's camera on the mainland approach from I-40 and Hampstead, a mile from the bridge.",
+    name: "Surf City (NC-50 and NC-210 junction)",
+    body: "The light where NC-210 from Hampstead and NC-50 from Holly Ridge meet at Roland Ave. A line here means the merge is the bottleneck.",
   },
   {
     name: "US-17 at Porters Neck",
@@ -53,18 +53,18 @@ const CAM_NOTES = [
     name: "Island roundabout (Surf City bridge cam)",
     body: ISLAND_CAM_EMBEDDED
       ? "The Island view shows configured live video from the island side of the Surf City bridge."
-      : "Surfchex hosts live video of the roundabout on the island side of the Surf City bridge. Their player only runs on Surfchex, so the Island view links to it.",
+      : "Surfchex hosts live video of the roundabout on the island side of the Surf City bridge. It is sometimes offline, and their player only runs on Surfchex, so the Island view links to it.",
   },
 ];
 
 const MORE_CAMS = [
   {
-    name: "Surf City Pier — south view",
+    name: "Surf City Pier, south view",
     href: "https://www.surfchex.com/cams/surf-city-pier-south/",
     who: "Surfchex",
   },
   {
-    name: "Surf City Pier — north view",
+    name: "Surf City Pier, north view",
     href: "https://www.surfchex.com/cams/surf-city-pier-north/",
     who: "Surfchex",
   },
@@ -89,8 +89,8 @@ const FAQ = [
   {
     q: "Is there a live camera of the Surf City bridge?",
     a: ISLAND_CAM_EMBEDDED
-      ? "Yes. The Island view shows the configured live camera on the island side of the bridge, and the Surf City and NC-210 cameras show NCDOT's views of the mainland approach."
-      : "Yes. The Island view links to Surfchex's live roundabout camera on the island side of the bridge. The Surf City and NC-210 cameras show NCDOT's views of the mainland approach without leaving this page.",
+      ? "Yes. The Island view shows the configured live camera on the island side of the bridge, and the Roland Ave and Surf City cameras show NCDOT's views of the mainland approach."
+      : "Yes. The Island view links to Surfchex's live roundabout camera on the island side of the bridge. The Roland Ave and Surf City cameras show NCDOT's views of the mainland approach without leaving this page.",
   },
   {
     q: "How can I check Topsail traffic before I leave home?",
@@ -114,7 +114,7 @@ export default function CamsPage() {
         lede={
           ISLAND_CAM_EMBEDDED
             ? "Live island-side and NCDOT views of NC-210, US-17, and I-40 in one place."
-            : "Every NCDOT camera on the way to the bridge in one place: Surf City, NC-210, US-17, and I-40, plus a link to Surfchex's Surf City bridge roundabout cam."
+            : "NCDOT cameras on the way to the bridge in one place: Roland Ave and the Surf City junction by the bridge, US-17 from Wilmington, and I-40 from Raleigh, plus a link to Surfchex's Surf City bridge roundabout cam."
         }
       />
 
@@ -159,7 +159,7 @@ export default function CamsPage() {
               <a href={c.href} target="_blank" rel="noreferrer" className="text-sky-700 hover:underline dark:text-sky-400">
                 {c.name}
               </a>{" "}
-              <span className="text-slate-400">— {c.who}</span>
+              <span className="text-slate-500 dark:text-slate-400">({c.who})</span>
             </li>
           ))}
         </ul>
@@ -199,7 +199,7 @@ export default function CamsPage() {
         </dl>
       </section>
 
-      <TipJar />
+      <TipJar source="cams" />
 
       <script
         type="application/ld+json"

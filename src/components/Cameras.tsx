@@ -4,6 +4,7 @@ import type Hls from "hls.js";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ISLAND_CAMERA_MODE, ISLAND_HLS } from "@/lib/camera-config";
 import { NCDOT_CAMS, isPlaceholder, type NcdotCam } from "@/lib/cams";
+import { track } from "@/lib/track";
 
 // This feed's usual failure is silent, not loud: the player stays "playing"
 // while the picture freezes, or it drifts minutes behind the live edge and
@@ -82,10 +83,10 @@ function CamPlaceholder({
 function SurfchexLink() {
   return (
     <CamPlaceholder
-      title="Live Surf City Bridge camera"
-      subtitle="Hosted by Surf City IGA via Surfchex"
+      title="Surf City Bridge camera"
+      subtitle="Hosted by Surf City IGA via Surfchex. It's sometimes offline."
       href="https://www.surfchex.com/cams/surf-city-bridge/"
-      hrefLabel="Open live camera on Surfchex"
+      hrefLabel="Open the camera on Surfchex"
     />
   );
 }
@@ -464,18 +465,36 @@ function NcdotSnapshot({ cam, fallback }: { cam: NcdotCam; fallback?: { label: s
   if (state === "loading") {
     return <CamPlaceholder pulse subtitle="Loading camera view…" />;
   }
+  // A dead feed is a quiet status row, not a full-size frame: it shouldn't
+  // outrank the verdict or the cameras that are working.
   if (state === "offline") {
     return (
-      <div className="relative">
-        <CamPlaceholder title="Camera is down right now" subtitle={`${cam.label} feed · NCDOT`} />
-        {fallback && (
+      <div
+        role="status"
+        className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-2xl bg-slate-100 px-4 py-3.5 text-sm dark:bg-slate-800"
+      >
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" className="shrink-0 text-slate-400" aria-hidden>
+          <rect x="2.5" y="6" width="14" height="12" rx="2.5" />
+          <path d="m16.5 10.5 5-3v9l-5-3M3 3l18 18" />
+        </svg>
+        <div className="min-w-0 flex-1">
+          <p className="font-medium text-slate-800 dark:text-slate-100">{cam.label} camera is offline</p>
+          <p className="text-xs text-slate-500 dark:text-slate-400">
+            NCDOT isn&apos;t sending pictures right now. Drive times are still live.
+          </p>
+        </div>
+        {fallback ? (
           <button
             type="button"
             onClick={fallback.onClick}
-            className="pressable absolute bottom-3 left-1/2 -translate-x-1/2 rounded-full bg-white px-3.5 py-1.5 text-xs font-semibold text-sky-800 shadow-lg"
+            className="pressable shrink-0 rounded-full bg-white px-3.5 py-2 text-xs font-semibold text-sky-800 shadow-sm dark:bg-slate-900 dark:text-sky-300"
           >
-            Show {fallback.label} instead
+            Show {fallback.label}
           </button>
+        ) : (
+          <a href={DRIVENC} target="_blank" rel="noreferrer" className="shrink-0 text-xs font-medium text-sky-700 hover:underline dark:text-sky-400">
+            Check DriveNC ↗
+          </a>
         )}
       </div>
     );
@@ -529,6 +548,7 @@ export function Cameras() {
   }, [status]);
 
   const choose = (k: CamKey) => {
+    track("cam_select", { cam: k });
     userPicked.current = true;
     setView(k);
   };
@@ -599,11 +619,13 @@ export function Cameras() {
   );
 }
 
-// Every camera at once, for /cams.
+// Every camera at once, for /cams. Working cameras first, in route order.
 export function CameraGrid() {
+  const status = useCamStatus();
+  const ordered = status ? [...NCDOT_CAMS].sort((a, b) => Number(!!status[b.id]) - Number(!!status[a.id])) : NCDOT_CAMS;
   return (
     <div className="grid gap-5 sm:grid-cols-2">
-      {NCDOT_CAMS.map((c) => (
+      {ordered.map((c) => (
         <figure key={c.id}>
           <NcdotSnapshot cam={c} />
           <figcaption className="mt-2 text-sm leading-snug">

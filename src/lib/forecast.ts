@@ -42,26 +42,36 @@ function freeFlowDepartAt(): string {
   return `${p.year}-${p.month}-${p.day}T05:00`;
 }
 
-// One traffic-aware route lookup. departAt omitted => live conditions, never
-// cached. Predicted (depart_at) lookups pass a revalidate so the Next data
-// cache dedupes them: the same (route, depart_at) pair is fetched from Mapbox
-// once and shared by every poll and every user until it expires.
+// One traffic-aware route lookup. departAt omitted => live conditions, shared
+// for a minute (matching the CDN window) so concurrent builds in different
+// regions don't each pay for it. Predicted (depart_at) lookups pass a longer
+// revalidate so the Next data cache dedupes them: the same (route, depart_at)
+// pair is fetched from Mapbox once and shared by every poll and every user.
+// Never throws: a failed point is null, and buildForecast copes with gaps.
 export async function routeDuration(
   o: LngLat,
   d: LngLat,
   departAt?: string,
   revalidate?: number,
+  liveRevalidate = 60,
 ): Promise<{ minutes: number; distanceMi: number } | null> {
   if (!TOKEN) return null;
   const coords = `${o.lng},${o.lat};${d.lng},${d.lat}`;
   let url = `https://api.mapbox.com/directions/v5/mapbox/driving-traffic/${coords}?overview=false&access_token=${TOKEN}`;
   if (departAt) url += `&depart_at=${encodeURIComponent(departAt)}`;
-  const r = await fetch(url, departAt && revalidate ? { next: { revalidate } } : { cache: "no-store" });
-  if (!r.ok) return null;
-  const j = await r.json();
-  const route = j?.routes?.[0];
-  if (!route) return null;
-  return { minutes: route.duration / 60, distanceMi: route.distance / 1609.34 };
+  try {
+    const r = await fetch(url, {
+      next: { revalidate: departAt && revalidate ? revalidate : liveRevalidate },
+      signal: AbortSignal.timeout(6000),
+    });
+    if (!r.ok) return null;
+    const j = await r.json();
+    const route = j?.routes?.[0];
+    if (!route) return null;
+    return { minutes: route.duration / 60, distanceMi: route.distance / 1609.34 };
+  } catch {
+    return null;
+  }
 }
 
 // Predictions barely move within half an hour; the live point carries the
@@ -78,6 +88,7 @@ export async function buildForecast(
   d: LngLat,
   horizonMin = 180,
   stepMin = 15,
+  liveRevalidate = 60,
 ): Promise<Forecast> {
   const start = new Date();
   const stepMs = stepMin * 60_000;
@@ -88,7 +99,7 @@ export async function buildForecast(
   // Kick off the free-flow probe and the live reading in parallel with the
   // predicted points.
   const freeFlowPromise = routeDuration(o, d, freeFlowDepartAt(), FREE_FLOW_TTL);
-  const livePromise = routeDuration(o, d);
+  const livePromise = routeDuration(o, d, undefined, undefined, liveRevalidate);
 
   const predicted = await Promise.all(
     marks.map(async (when) => {

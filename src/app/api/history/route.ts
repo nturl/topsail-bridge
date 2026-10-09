@@ -1,12 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { unstable_cache } from "next/cache";
 import bundled from "@/data/typical.json";
+import bundledMeasured from "@/data/measured.json";
 import { DEFAULT_ORIGIN, DEFAULT_DEST, canonicalDir } from "@/lib/places";
 import { generateTypical } from "@/lib/mapbox";
 import { inServiceArea, quantizePoint } from "@/lib/geo";
 import type { LngLat } from "@/lib/types";
 
-const RAW = "https://raw.githubusercontent.com/nturl/topsail-bridge/main/data/log.ndjson";
+const MEASURED_RAW = "https://raw.githubusercontent.com/nturl/topsail-bridge/main/src/data/measured.json";
+
+type Measured = Record<"out" | "back", Record<string, Record<string, { min: number; n: number }>>>;
 
 type Cell = {
   dow: number;
@@ -25,12 +28,6 @@ const cachedTypical = unstable_cache(
   { revalidate: 604_800 },
 );
 
-function median(a: number[]): number {
-  const s = [...a].sort((x, y) => x - y);
-  const m = Math.floor(s.length / 2);
-  return s.length % 2 ? s[m] : Math.round((s[m - 1] + s[m]) / 2);
-}
-
 function parse(s: string | null, fallback: LngLat): LngLat {
   if (s) {
     const [lng, lat] = s.split(",").map(Number);
@@ -44,52 +41,54 @@ export async function GET(req: NextRequest) {
   const o = parse(sp.get("o"), DEFAULT_ORIGIN);
   const d = parse(sp.get("d"), DEFAULT_DEST);
   // Non-canonical routes trigger a 42-call Mapbox generation; bound who can ask.
-  if (!inServiceArea(o) || !inServiceArea(d)) return new NextResponse(null, { status: 400 });
+  if (!inServiceArea(o) || !inServiceArea(d))
+    return new NextResponse(null, { status: 400, headers: { "Cache-Control": "public, s-maxage=3600" } });
   const canon = canonicalDir(o, d);
 
   const hours = bundled.hours as number[];
   let grid: Record<string, Record<string, number>>;
-  const actuals = new Map<string, number[]>();
+  const actuals = new Map<string, { min: number; n: number }>();
   let totalActual = 0;
 
   if (canon) {
     grid = (bundled as Record<string, unknown>)[canon] as Record<string, Record<string, number>>;
+    // The cron folds every reading into measured.json (per-hour medians and
+    // counts, ~20 KB); read that live from GitHub so new readings show up
+    // without a redeploy, falling back to the copy bundled at build time.
+    let measured: Measured = bundledMeasured as Measured;
     try {
-      const r = await fetch(RAW, { next: { revalidate: 600 } });
-      if (r.ok) {
-        const text = await r.text();
-        for (const line of text.split("\n")) {
-          const t = line.trim();
-          if (!t) continue;
-          try {
-            const rec = JSON.parse(t);
-            const rd = rec.dir === "back" ? "back" : "out";
-            if (rd !== canon) continue;
-            if (typeof rec.dow === "number" && typeof rec.hod === "number" && typeof rec.min === "number") {
-              const k = `${rec.dow}:${rec.hod}`;
-              const arr = actuals.get(k) ?? [];
-              arr.push(rec.min);
-              actuals.set(k, arr);
-              totalActual++;
-            }
-          } catch {
-            /* skip */
-          }
-        }
-      }
+      const r = await fetch(MEASURED_RAW, { next: { revalidate: 600 }, signal: AbortSignal.timeout(8000) });
+      if (r.ok) measured = (await r.json()) as Measured;
     } catch {
-      /* raw unavailable */
+      /* raw unavailable: bundled copy */
+    }
+    for (const [dow, hours] of Object.entries(measured[canon] ?? {})) {
+      for (const [hod, cell] of Object.entries(hours)) {
+        actuals.set(`${dow}:${hod}`, cell);
+        totalActual += cell.n;
+      }
     }
   } else {
-    grid = await cachedTypical(o.lng, o.lat, d.lng, d.lat);
+    // A typical week is a coarse rhythm, so snap both ends to ~1 km: nearby
+    // houses share one generation, and the paid key space stays small.
+    const snap = (v: number) => Math.round(v * 100) / 100;
+    try {
+      grid = await cachedTypical(snap(o.lng), snap(o.lat), snap(d.lng), snap(d.lat));
+    } catch {
+      // Generation came back too thin to trust (see generateTypical); retry later.
+      return NextResponse.json(
+        { canonical: false, hours, cells: [], totalActual: 0 },
+        { headers: { "Cache-Control": "public, s-maxage=300" } },
+      );
+    }
   }
 
   const cells: Cell[] = [];
   for (let dow = 0; dow < 7; dow++) {
     for (const hod of hours) {
       const act = actuals.get(`${dow}:${hod}`);
-      if (act && act.length) {
-        cells.push({ dow, hod, minutes: median(act), source: "actual", samples: act.length });
+      if (act && act.n > 0) {
+        cells.push({ dow, hod, minutes: act.min, source: "actual", samples: act.n });
       } else {
         const typ = grid?.[String(dow)]?.[String(hod)];
         if (typ != null) cells.push({ dow, hod, minutes: typ, source: "typical", samples: 0 });

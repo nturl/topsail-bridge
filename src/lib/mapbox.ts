@@ -18,12 +18,20 @@ export async function geocodeSearch(q: string, limit = 5): Promise<Place[]> {
   // 1-2 character prefixes are never useful results, but each unique one is a
   // billable Search Box request; wait for a real query.
   if (q.trim().length < 3 || !TOKEN) return [];
+  // Search is case-insensitive; normalizing keeps "Harris" and "harris" on one
+  // cache entry instead of two billable requests.
+  const query = q.trim().replace(/\s+/g, " ").toLowerCase();
   const url = `https://api.mapbox.com/search/searchbox/v1/forward?q=${encodeURIComponent(
-    q,
+    query,
   )}&access_token=${TOKEN}&limit=8&country=us&proximity=${PROXIMITY}&bbox=${BBOX}&types=poi,address,place,locality,neighborhood`;
-  const r = await fetch(url, { next: { revalidate: 86_400 } });
+  let r: Response;
+  try {
+    r = await fetch(url, { next: { revalidate: 86_400 }, signal: AbortSignal.timeout(5000) });
+  } catch {
+    return [];
+  }
   if (!r.ok) return [];
-  const j = (await r.json()) as {
+  const j = (await r.json().catch(() => ({}))) as {
     features?: Array<{
       properties?: {
         name?: string;
@@ -62,10 +70,14 @@ export async function reverseGeocode(lng: number, lat: number): Promise<Place | 
   if (!TOKEN) return null;
   const url = `https://api.mapbox.com/geocoding/v5/mapbox.places/${lng},${lat}.json?access_token=${TOKEN}&limit=1`;
   // Coordinates arrive quantized (~11 m), so the same spot resolves once a day.
-  const r = await fetch(url, { next: { revalidate: 86_400 } });
-  if (!r.ok) return null;
-  const f = ((await r.json()) as { features?: Array<{ text?: string; place_name?: string }> }).features?.[0];
-  return f ? { label: f.text ?? "My location", address: f.place_name ?? "My location", lng, lat } : null;
+  try {
+    const r = await fetch(url, { next: { revalidate: 86_400 }, signal: AbortSignal.timeout(5000) });
+    if (!r.ok) return null;
+    const f = ((await r.json()) as { features?: Array<{ text?: string; place_name?: string }> }).features?.[0];
+    return f ? { label: f.text ?? "My location", address: f.place_name ?? "My location", lng, lat } : null;
+  } catch {
+    return null;
+  }
 }
 
 // Route geometry plus per-segment congestion (driving-traffic only), so the
@@ -75,9 +87,14 @@ export type CongestionRoute = { polyline: string; congestion: string[] };
 export async function routeWithCongestion(o: LngLat, d: LngLat): Promise<CongestionRoute | null> {
   if (!TOKEN) return null;
   const url = `https://api.mapbox.com/directions/v5/mapbox/driving-traffic/${o.lng},${o.lat};${d.lng},${d.lat}?geometries=polyline&overview=full&annotations=congestion&access_token=${TOKEN}`;
-  const r = await fetch(url, { next: { revalidate: 600 } });
+  let r: Response;
+  try {
+    r = await fetch(url, { next: { revalidate: 600 }, signal: AbortSignal.timeout(6000) });
+  } catch {
+    return null;
+  }
   if (!r.ok) return null;
-  const route = ((await r.json()) as {
+  const route = ((await r.json().catch(() => ({}))) as {
     routes?: Array<{ geometry?: string; legs?: Array<{ annotation?: { congestion?: string[] } }> }>;
   })?.routes?.[0];
   if (!route?.geometry) return null;
@@ -156,10 +173,14 @@ const DOW: Record<string, number> = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fr
 
 async function predictAt(coords: string, departStr: string): Promise<number | null> {
   const url = `https://api.mapbox.com/directions/v5/mapbox/driving-traffic/${coords}?overview=false&access_token=${TOKEN}&depart_at=${encodeURIComponent(departStr)}`;
-  const r = await fetch(url, { next: { revalidate: 86_400 } });
-  if (!r.ok) return null;
-  const route = ((await r.json()) as { routes?: Array<{ duration: number }> })?.routes?.[0];
-  return route ? Math.round(route.duration / 60) : null;
+  try {
+    const r = await fetch(url, { next: { revalidate: 86_400 }, signal: AbortSignal.timeout(6000) });
+    if (!r.ok) return null;
+    const route = ((await r.json()) as { routes?: Array<{ duration: number }> })?.routes?.[0];
+    return route ? Math.round(route.duration / 60) : null;
+  } catch {
+    return null;
+  }
 }
 
 // Traffic rhythm is smooth hour to hour, so sample every 3 hours and fill the
@@ -183,13 +204,18 @@ export async function generateTypical(o: LngLat, d: LngLat): Promise<Record<stri
     }
   }
   const BATCH = 10;
+  let missing = 0;
   for (let i = 0; i < tasks.length; i += BATCH) {
     const slice = tasks.slice(i, i + BATCH);
     const res = await Promise.all(slice.map((t) => predictAt(coords, t.departStr)));
     slice.forEach((t, j) => {
       if (res[j] != null) grid[String(t.dow)][String(t.h)] = res[j] as number;
+      else missing++;
     });
   }
+  // A rate-limit blip would otherwise be cached as a hollow week for 7 days.
+  // Throwing keeps unstable_cache from storing it; the caller falls back.
+  if (missing > tasks.length / 4) throw new Error("typical week incomplete");
 
   for (let dow = 0; dow < 7; dow++) {
     const day = grid[String(dow)];

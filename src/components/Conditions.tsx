@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { Cameras } from "./Cameras";
 import { wmoLabel } from "@/lib/context";
 import type { ConditionsData } from "@/lib/types";
@@ -13,22 +14,34 @@ function etHour(): number {
   );
 }
 
+// Official pages only: parking rates differ between sources, so link rather than quote.
+const BEACH_LINKS = [
+  { label: "Surf City parking map", href: "https://pivot.park.tez.io/map/surf-city" },
+  { label: "Topsail Beach parking", href: "https://topsailbeachnc.gov/Visitors/Public-Accesses-and-Parking" },
+  {
+    label: "Swim advisories",
+    href: "https://www.deq.nc.gov/about/divisions/marine-fisheries/shellfish-sanitation-and-recreational-water-quality/recreational-water-quality",
+  },
+];
+
+const RIP_TONE = {
+  Low: "bg-emerald-100 text-emerald-800 dark:bg-emerald-500/15 dark:text-emerald-300",
+  Moderate: "bg-amber-100 text-amber-800 dark:bg-amber-500/15 dark:text-amber-300",
+  High: "bg-rose-100 text-rose-800 dark:bg-rose-500/15 dark:text-rose-300",
+} as const;
+
 export function Conditions({ data }: { data: ConditionsData | null }) {
   const w = data?.weather;
+  const beach = data?.beach ?? null;
   const incidents = data?.incidents ?? [];
 
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h2 className="text-[11px] font-medium uppercase tracking-[0.08em] text-slate-400">On the bridge now</h2>
-        <a
-          href="https://drivenc.gov/"
-          target="_blank"
-          rel="noreferrer"
-          className="text-xs text-sky-700 hover:underline dark:text-sky-400"
-        >
-          DriveNC ↗
-        </a>
+        <Link href="/cams" className="text-xs font-medium text-sky-700 hover:underline dark:text-sky-400">
+          All cams →
+        </Link>
       </div>
 
       <Cameras />
@@ -44,9 +57,37 @@ export function Conditions({ data }: { data: ConditionsData | null }) {
             Rain now
           </span>
         )}
-        {w && w.windMph >= 20 && (
-          <span className="rounded-full bg-amber-100 px-2.5 py-1 text-amber-800 dark:bg-amber-500/15 dark:text-amber-300">
-            Wind {w.windMph} mph
+        {w && (w.windMph >= 20 || (w.gustMph ?? 0) >= 30) && (
+          <span
+            className={
+              w.windMph >= 35
+                ? "rounded-full bg-rose-100 px-2.5 py-1 text-rose-800 dark:bg-rose-500/15 dark:text-rose-300"
+                : "rounded-full bg-amber-100 px-2.5 py-1 text-amber-800 dark:bg-amber-500/15 dark:text-amber-300"
+            }
+          >
+            Wind {w.windMph} mph{w.gustMph ? `, gusts ${w.gustMph}` : ""}
+          </span>
+        )}
+        {beach && (
+          <a
+            href="https://www.weather.gov/beach/ilm"
+            target="_blank"
+            rel="noreferrer"
+            title="NWS Surf Zone Forecast for Surf City and Topsail Beach"
+            className={`rounded-full px-2.5 py-1 hover:opacity-80 ${RIP_TONE[beach.rip]}`}
+          >
+            {beach.rip} rip risk
+            {beach.next && beach.next.rip !== beach.rip ? `, ${beach.next.rip.toLowerCase()} ${beach.next.label}` : ""}
+          </a>
+        )}
+        {beach?.surf && (
+          <span className="rounded-full bg-slate-100 px-2.5 py-1 text-slate-700 dark:bg-slate-800 dark:text-slate-300">
+            Surf {beach.surf.replace(/^around /i, "~").replace(/ feet$/i, " ft")}
+          </span>
+        )}
+        {beach?.water && (
+          <span className="rounded-full bg-slate-100 px-2.5 py-1 text-slate-700 dark:bg-slate-800 dark:text-slate-300">
+            Water {beach.water}
           </span>
         )}
         {(data?.tides ?? []).map((t) => (
@@ -66,11 +107,19 @@ export function Conditions({ data }: { data: ConditionsData | null }) {
 
       <div className="space-y-2">
         {!data ? (
-          <p className="text-xs text-slate-400">Checking the route…</p>
+          <p className="text-xs text-slate-500 dark:text-slate-400">Checking NCDOT alerts…</p>
+        ) : data.incidentsDown ? (
+          <p className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
+            <span className="h-1.5 w-1.5 rounded-full bg-slate-400" />
+            NCDOT alerts are unavailable right now.{" "}
+            <a href="https://drivenc.gov/" target="_blank" rel="noreferrer" className="text-sky-700 hover:underline dark:text-sky-400">
+              Check DriveNC ↗
+            </a>
+          </p>
         ) : incidents.length === 0 ? (
           <p className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
             <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-            No roadwork or incidents reported on the route.
+            No NCDOT alerts on the route.
           </p>
         ) : (
           incidents.map((inc) => (
@@ -120,6 +169,18 @@ export function Conditions({ data }: { data: ConditionsData | null }) {
           </a>
         )}
       </div>
+
+      <p className="text-xs text-slate-500 dark:text-slate-400">
+        Beach day:{" "}
+        {BEACH_LINKS.map((l, i) => (
+          <span key={l.href}>
+            {i > 0 && " · "}
+            <a href={l.href} target="_blank" rel="noreferrer" className="text-sky-700 hover:underline dark:text-sky-400">
+              {l.label}
+            </a>
+          </span>
+        ))}
+      </p>
     </div>
   );
 }

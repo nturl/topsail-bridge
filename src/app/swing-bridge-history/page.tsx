@@ -4,7 +4,7 @@ import { PageHeader } from "@/components/PageHeader";
 import { TipJar } from "@/components/TipJar";
 
 export const metadata: Metadata = {
-  title: "Surf City Swing Bridge History — What Happened to the Old Bridge?",
+  title: "Surf City Swing Bridge History: What Happened to the Old Bridge?",
   description:
     "The Surf City swing bridge opened in 1955 and closed for good in 2018, replaced by a new 65-foot high-rise span. Here's what happened to it, and why bridge openings aren't why traffic backs up on Topsail Island anymore.",
   alternates: { canonical: "/swing-bridge-history" },
@@ -39,7 +39,7 @@ const FAQ = [
   },
   {
     q: "Is the Surf City bridge still a swing bridge?",
-    a: "No. Today's bridge is a fixed, 65-foot-clearance high-rise span that opened in 2018 and never opens for boats. If you're hitting backups now, that's vacation-season volume, not bridge openings — see our best-time-to-leave page for when the corridor actually slows down.",
+    a: "No. Today's bridge is a fixed, 65-foot-clearance high-rise span that opened in 2018 and never opens for boats. If you're hitting backups now, that's vacation-season volume, not bridge openings. See our best-time-to-leave page for when the corridor actually slows down.",
   },
 ];
 
@@ -48,7 +48,7 @@ export default function SwingBridgeHistoryPage() {
     <main className="mx-auto w-full max-w-3xl px-5 py-8 md:py-12">
       <PageHeader
         title="What happened to the Surf City swing bridge?"
-        lede="The old swing bridge that stopped traffic every time it opened for boats closed for good in December 2018, replaced by a fixed, 65-foot-clearance high-rise span. Today's bridge never opens — so bridge openings aren't why traffic backs up on Topsail Island anymore."
+        lede="The old swing bridge that stopped traffic every time it opened for boats closed for good in December 2018, replaced by a fixed, 65-foot-clearance high-rise span. Today's bridge never opens, so bridge openings aren't why traffic backs up on Topsail Island anymore."
       />
 
       <section className={`${CARD} animate-fade-up`}>
@@ -56,7 +56,7 @@ export default function SwingBridgeHistoryPage() {
         <p className={PROSE}>
           The old Surf City swing bridge closed for good in December 2018 and was demolished over the following
           months. NCDOT replaced it with a fixed, 65-foot-clearance high-rise span that opened to traffic on
-          December 4, 2018 — about nine months ahead of schedule. Because the new bridge sits high enough for boats
+          December 4, 2018, about nine months ahead of schedule. Because the new bridge sits high enough for boats
           to pass underneath, it never has to swing open, and it no longer stops traffic the way the old bridge did.
         </p>
       </section>
@@ -66,20 +66,20 @@ export default function SwingBridgeHistoryPage() {
         <p className={PROSE}>
           The original Surf City swing bridge opened in November 1955: a 255-foot steel truss span across the
           Intracoastal Waterway, built to swing open sideways whenever a boat needed to pass. For 63 years, that was
-          the only way onto the middle of Topsail Island — and every time it opened, every car on the road stopped
+          the only way onto the middle of Topsail Island, and every time it opened, every car on the road stopped
           and waited.
         </p>
         <p className={PROSE}>
           By the 2010s the bridge was aging, and the daily openings were a growing bottleneck for an island that
           kept getting busier. NCDOT took on a roughly $53 million project to replace it with a fixed span tall
           enough that it would never need to open at all. The new high-rise bridge, with 65 feet of vertical
-          clearance, opened to traffic on December 4, 2018 — about nine months ahead of its original September 2019
+          clearance, opened to traffic on December 4, 2018, about nine months ahead of its original September 2019
           target.
         </p>
         <p className={PROSE}>
           The old swing bridge was permanently closed the same day traffic shifted to the new span, then taken down
-          in stages across 2018 and 2019. (If you're thinking of the other bridge onto Topsail Island — the one near
-          Sneads Ferry at the island's north end — that one was never a swing bridge; this page is about the Surf
+          in stages across 2018 and 2019. (If you're thinking of the other bridge onto Topsail Island, the one near
+          Sneads Ferry at the island's north end, that one was never a swing bridge; this page is about the Surf
           City crossing in the middle of the island.)
         </p>
       </section>
@@ -87,7 +87,7 @@ export default function SwingBridgeHistoryPage() {
       <section className={`${CARD} animate-fade-up`} style={{ animationDelay: "120ms" }}>
         <h2 className={H2}>Check the live number before you load the car</h2>
         <p className={PROSE}>
-          The swing bridge is history — what slows you down now is volume, not bridge openings. Topsail Traffic
+          The swing bridge is history. What slows you down now is volume, not bridge openings. Topsail Traffic
           shows the crossing time right now, a three-hour forecast, and the best window to go.
         </p>
         <div className="mt-4 flex flex-wrap gap-3">
@@ -118,7 +118,7 @@ export default function SwingBridgeHistoryPage() {
         </dl>
       </section>
 
-      <TipJar />
+      <TipJar source="history" />
 
       <script
         type="application/ld+json"

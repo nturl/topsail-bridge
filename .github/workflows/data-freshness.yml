@@ -1,0 +1,24 @@
+name: data-freshness
+
+# Dead-man check for the poller: fails (and GitHub emails the repo owner) when
+# the newest reading in data/log.ndjson is more than 6 hours old, so a stalled
+# schedule is noticed in a day instead of weeks.
+on:
+  schedule:
+    - cron: "23 13 * * *"
+  workflow_dispatch: {}
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Newest reading is recent
+        run: |
+          last=$(tail -n 1 data/log.ndjson | sed -E 's/.*"at":"([^"]+)".*/\1/')
+          age=$(( $(date -u +%s) - $(date -u -d "$last" +%s) ))
+          echo "newest reading: $last ($((age / 60)) min ago)"
+          if [ "$age" -gt 21600 ]; then
+            echo "::error::No traffic reading for $((age / 3600)) hours. The poll-traffic schedule has stalled."
+            exit 1
+          fi

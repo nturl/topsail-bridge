@@ -12,10 +12,15 @@
 // quietly when they are unset so the scheduled workflow is a no-op until the
 // token exists; exits 1 loudly on API failures so Actions emails the owner.
 
+import { appendFileSync } from "node:fs";
+
 const PAGE_ID = process.env.FB_PAGE_ID;
 const TOKEN = process.env.FB_PAGE_TOKEN;
 if (!PAGE_ID || !TOKEN) {
-  console.log("FB_PAGE_ID / FB_PAGE_TOKEN not set; skipping. See docs/facebook-setup.md to enable posting.");
+  const msg = "FB_PAGE_ID / FB_PAGE_TOKEN not set; skipping. See docs/facebook-setup.md to enable posting.";
+  console.log(msg);
+  // Still green, but visible on the run page instead of buried in the log.
+  if (process.env.GITHUB_STEP_SUMMARY) appendFileSync(process.env.GITHUB_STEP_SUMMARY, `> ⚠️ Nothing posted: ${msg}\n`);
   process.exit(0);
 }
 

@@ -18,8 +18,13 @@ export async function GET(req: NextRequest) {
   const d = parseLngLat(sp.get("d"), DEFAULT_DEST);
   // This route fans out to 13 paid Mapbox calls; don't run it for coordinates
   // no real Topsail-bound user would send.
-  if (!inServiceArea(o) || !inServiceArea(d)) return new NextResponse(null, { status: 400 });
+  if (!inServiceArea(o) || !inServiceArea(d))
+    return new NextResponse(null, { status: 400, headers: { "Cache-Control": "public, s-maxage=3600" } });
   const fc = await buildForecast(o, d);
+  // Every point failed (Mapbox down, quota hit, no token): say so instead of
+  // letting the CDN pin an empty forecast for minutes.
+  if (fc.now == null && fc.points.every((p) => p.minutes == null))
+    return new NextResponse(null, { status: 503, headers: { "Cache-Control": "no-store" } });
   return NextResponse.json(fc, {
     headers: {
       "Cache-Control": "public, s-maxage=120, stale-while-revalidate=300",

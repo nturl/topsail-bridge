@@ -59,8 +59,14 @@ body {
 
 @media (prefers-reduced-motion: reduce) {
   .animate-fade-up,
-  .animate-sheet-up {
+  .animate-sheet-up,
+  .animate-pulse {
     animation: none;
+  }
+  *,
+  *::before,
+  *::after {
+    transition-duration: 0.01ms !important;
   }
   .pressable,
   .pressable:active {
@@ -71,4 +77,20 @@ body {
 
 html {
   -webkit-tap-highlight-color: transparent;
+}
+
+/* No double-tap-zoom delay on controls; pinch zoom still works. */
+a,
+button,
+[role="button"],
+input,
+select,
+label {
+  touch-action: manipulation;
+}
+
+/* Keyboard focus stays visible everywhere; mouse and touch clicks don't ring. */
+:focus-visible {
+  outline: 2px solid #0284c7;
+  outline-offset: 2px;
 }

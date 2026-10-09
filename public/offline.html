@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#f0f9ff" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0f172a" media="(prefers-color-scheme: dark)">
+<title>Offline | Topsail Traffic</title>
+<!-- Served by the service worker when a page that was never saved is opened
+     with no signal. Self-contained: no fonts, scripts or images to fetch. -->
+<style>
+  :root {
+    --bg: #f0f9ff; --card: #ffffff; --ink: #0f172a; --muted: #475569; --faint: #94a3b8;
+    --line: #e2e8f0; --accent: #0284c7; --accent-ink: #ffffff;
+    color-scheme: light dark;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0f172a; --card: #111c33; --ink: #f1f5f9; --muted: #cbd5e1; --faint: #64748b;
+      --line: rgba(255,255,255,.1); --accent: #38bdf8; --accent-ink: #0f172a;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; min-height: 100vh; background: var(--bg); color: var(--ink);
+    font: 15px/1.5 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+    display: flex; align-items: center; justify-content: center;
+    padding: calc(24px + env(safe-area-inset-top)) 16px calc(24px + env(safe-area-inset-bottom));
+  }
+  main {
+    width: 100%; max-width: 400px; background: var(--card); border: 1px solid var(--line);
+    border-radius: 24px; padding: 24px; box-shadow: 0 16px 40px -24px rgba(2,6,23,.3);
+  }
+  .brand { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 600; color: var(--muted); }
+  h1 { font: 400 30px/1.15 ui-serif, Georgia, "Times New Roman", serif; margin: 20px 0 8px; }
+  p { margin: 0 0 12px; color: var(--muted); }
+  .btn {
+    display: block; width: 100%; margin-top: 16px; padding: 11px; border: 0; border-radius: 12px;
+    background: var(--accent); color: var(--accent-ink); font: 600 14px/1.2 inherit; font-family: inherit;
+    text-align: center; text-decoration: none; cursor: pointer;
+  }
+  .btn.ghost { background: transparent; color: var(--ink); border: 1px solid var(--line); margin-top: 8px; }
+  .call { margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--line); font-size: 13px; }
+  .call a { color: var(--accent); font-weight: 600; }
+</style>
+</head>
+<body>
+<main>
+  <div class="brand">
+    <svg width="36" height="24" viewBox="0 0 36 24" aria-hidden="true">
+      <ellipse cx="18" cy="12" rx="16.5" ry="10.5" fill="#fff" stroke="#0f172a" stroke-width="2.4"/>
+      <text x="18" y="16.2" text-anchor="middle" font-size="11.5" font-weight="800" fill="#0f172a" font-family="ui-sans-serif, system-ui" letter-spacing="0.5">TI</text>
+    </svg>
+    Topsail Traffic
+  </div>
+  <h1>No signal right now</h1>
+  <p>Live bridge times need a connection, and this page wasn&rsquo;t saved for offline use yet.</p>
+  <p>It will load on its own as soon as you&rsquo;re back online.</p>
+  <button class="btn" onclick="location.reload()">Try again</button>
+  <a class="btn ghost" href="/">Open the drive-time page</a>
+  <p class="call">Driving now? Call <a href="tel:511">511</a> for NCDOT road and traffic info. It works on a voice signal.</p>
+</main>
+<script>addEventListener("online", function () { location.reload(); });</script>
+</body>
+</html>

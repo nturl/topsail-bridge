@@ -35,7 +35,7 @@ Remote URL is right for this app: every screen is live data.
 ## Commands
 
 ```bash
-cd ~/Claude/topsail-bridge
+cd ~/dev/topsail-bridge
 npm install @capacitor/core @capacitor/cli @capacitor/ios
 
 npx cap init "Topsail Traffic" com.topsailtraffic.app --web-dir public

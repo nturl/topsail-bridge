@@ -6,6 +6,8 @@ export default function manifest(): MetadataRoute.Manifest {
     // Pre-fills the Add to Home Screen name; "Topsail" alone read as a typo.
     short_name: "Topsail Traffic",
     description: "When to leave (and return to) Topsail Island. Live and predicted Surf City bridge traffic.",
+    // Stable identity, so a future start_url change doesn't fork installs.
+    id: "/",
     start_url: "/",
     display: "standalone",
     background_color: "#f0f9ff",
@@ -26,6 +28,18 @@ export default function manifest(): MetadataRoute.Manifest {
         name: "Returning to the island",
         short_name: "Returning",
         url: "/?dir=back",
+        icons: [{ src: "/icons/manifest-192", sizes: "192x192", type: "image/png" }],
+      },
+      {
+        name: "Traffic cams",
+        short_name: "Cams",
+        url: "/cams",
+        icons: [{ src: "/icons/manifest-192", sizes: "192x192", type: "image/png" }],
+      },
+      {
+        name: "Best time to leave",
+        short_name: "Best time",
+        url: "/best-time-to-leave",
         icons: [{ src: "/icons/manifest-192", sizes: "192x192", type: "image/png" }],
       },
     ],

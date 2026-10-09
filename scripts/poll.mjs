@@ -1,7 +1,7 @@
 // Cron logger: records one live traffic-aware reading in each direction
 // (leaving the island and coming back) and appends them to data/log.ndjson.
 // Dependency-free (Node 20+ global fetch) so the GitHub Action needs no install.
-import { appendFileSync, mkdirSync } from "node:fs";
+import { appendFileSync, existsSync, mkdirSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -24,7 +24,28 @@ async function measure(coords) {
   return route ? { min: Math.round(route.duration / 60), mi: Math.round((route.distance / 1609.34) * 10) / 10 } : null;
 }
 
+const dataDir = join(dirname(fileURLToPath(import.meta.url)), "..", "data");
+mkdirSync(dataDir, { recursive: true });
+const logPath = join(dataDir, "log.ndjson");
+
+// The workflow is scheduled every 15 minutes because GitHub drops most
+// scheduled runs; when several do land close together, keep one reading per
+// ~half hour so the medians aren't weighted toward whenever runs bunch up.
+const MIN_GAP_MS = 25 * 60_000;
 const now = new Date();
+if (existsSync(logPath)) {
+  const last = readFileSync(logPath, "utf8").trimEnd().split("\n").pop();
+  try {
+    const at = Date.parse(JSON.parse(last).at);
+    if (now.getTime() - at < MIN_GAP_MS) {
+      console.log(`last reading ${Math.round((now.getTime() - at) / 60_000)} min ago; skipping`);
+      process.exit(0);
+    }
+  } catch {
+    /* unreadable last line: poll anyway */
+  }
+}
+
 const out = await measure(`${O.lng},${O.lat};${D.lng},${D.lat}`);
 const back = await measure(`${D.lng},${D.lat};${O.lng},${O.lat}`);
 if (!out && !back) {
@@ -41,10 +62,6 @@ const parts = new Intl.DateTimeFormat("en-US", {
 const weekday = parts.find((p) => p.type === "weekday").value;
 const hod = Number(parts.find((p) => p.type === "hour").value);
 const dow = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 }[weekday];
-
-const dataDir = join(dirname(fileURLToPath(import.meta.url)), "..", "data");
-mkdirSync(dataDir, { recursive: true });
-const logPath = join(dataDir, "log.ndjson");
 
 for (const [dir, m] of [["out", out], ["back", back]]) {
   if (!m) continue;
