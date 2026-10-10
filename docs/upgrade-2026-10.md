@@ -44,11 +44,11 @@ growth, followed by this build. What shipped and what still needs the owner.
 
 ## Needs the owner (everything else is built and waiting)
 
-1. **Poll cadence:** a Vercel Cron (`/api/cron/poll`, every 30 min) now asks
-   GitHub to run poll.yml. It is a no-op until you create a fine-grained PAT
-   (repo nturl/topsail-bridge only, Actions: Read and write), then
-   `env -u HTTPS_PROXY -u HTTP_PROXY vercel env add GITHUB_DISPATCH_TOKEN production`
-   and redeploy. Check by opening `/api/cron/poll` (expect `skipped` or `dispatched`).
+1. **Poll cadence: done 2026-10-10.** Vercel Cron calls `/api/cron/poll` every
+   30 min, which dispatches poll.yml with a fine-grained PAT
+   (`GITHUB_DISPATCH_TOKEN`, Production, sensitive; repo nturl/topsail-bridge
+   only, Actions read/write, expires in 366 days: renew it before then). First
+   dispatched run logged both directions at 16:21 UTC.
 2. **Rate limit** (needs the pricing dialog accepted, usage-based, cents/month):
    Vercel project topsail-bridge, Firewall, Configure, New Rule "Mapbox API rate
    limit": If Request Path matches `^/api/(forecast|history|geocode|staticmap)(/|$)`,
