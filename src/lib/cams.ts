@@ -67,9 +67,12 @@ export const NCDOT_CAM_IDS = new Set(NCDOT_CAMS.map((c) => c.id));
 // NCDOT's own "Embed Map On Your Site" map (drivenc.gov/map/embeddedmapsetup),
 // cameras layer only, centered on one camera. It is the sanctioned way to show
 // their live video: tapping the pin, then Show Video, plays the stream inside
-// DriveNC's own frame.
+// DriveNC's own frame. The embed has no parameter to open a camera directly
+// (it reads only Latitude/Longitude/Zoom/SelectedLayers/size/width/height/
+// bgColour/showAlert/showLegend), so it opens zoomed in on the pin with the
+// alert banner and legend hidden.
 export function liveMapUrl(cam: Pick<NcdotCam, "lat" | "lng">): string {
-  return `https://www.drivenc.gov/Map/EmbeddedMap?lat=${cam.lat}&lng=${cam.lng}&zoom=15&layers=Cameras&size=4`;
+  return `https://www.drivenc.gov/Map/EmbeddedMap?lat=${cam.lat}&lng=${cam.lng}&zoom=16&layers=Cameras&size=4&showAlert=false&showLegend=false`;
 }
 
 export function snapshotUrl(id: string): string {
