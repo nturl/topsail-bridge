@@ -464,8 +464,8 @@ function LiveMap({ cam, onClose }: { cam: NcdotCam; onClose: () => void }) {
     <div className="overflow-hidden rounded-2xl border border-slate-200 dark:border-white/10">
       <div className="flex items-center justify-between gap-3 bg-slate-50 px-3 py-2 text-xs dark:bg-slate-800">
         <p className="text-slate-600 dark:text-slate-300">
-          <span className="font-semibold text-slate-800 dark:text-slate-100">Live video:</span> tap the camera pin,
-          then Show Video.
+          <span className="font-semibold text-slate-800 dark:text-slate-100">Live video:</span> tap the blue camera
+          pin in the middle, then Show Video.
         </p>
         <button
           type="button"
