@@ -564,7 +564,15 @@ function InlineLive({ cam, poster, onFail, onClose }: { cam: NcdotCam & { hls: s
   );
 }
 
-function NcdotSnapshot({ cam, fallback }: { cam: NcdotCam; fallback?: { label: string; onClick: () => void } }) {
+function NcdotSnapshot({
+  cam,
+  fallback,
+  onLiveChange,
+}: {
+  cam: NcdotCam;
+  fallback?: { label: string; onClick: () => void };
+  onLiveChange?: (showing: boolean) => void;
+}) {
   const state = useSnapshot(cam.id);
   const [zoom, setZoom] = useState(false);
   const [live, setLive] = useState<null | "video" | "map">(null);
@@ -573,6 +581,14 @@ function NcdotSnapshot({ cam, fallback }: { cam: NcdotCam; fallback?: { label: s
     track("cam_live_fallback", { cam: cam.id });
     setLive("map");
   }, [cam.id]);
+
+  // The inline player carries its own NCDOT/DriveNC credit, so let the parent
+  // drop the duplicate caption credit while it's on screen.
+  const showingInlineVideo = live === "video" && !!cam.hls;
+  useEffect(() => {
+    onLiveChange?.(showingInlineVideo);
+    return () => onLiveChange?.(false);
+  }, [showingInlineVideo, onLiveChange]);
 
   if (live === "video" && cam.hls) {
     const poster = typeof state === "object" ? state.url : undefined;
@@ -658,6 +674,7 @@ function IslandView() {
 export function Cameras() {
   const status = useCamStatus();
   const [view, setView] = useState<CamKey>(NCDOT_CAMS[0].key);
+  const [inlineLive, setInlineLive] = useState(false);
   const userPicked = useRef(false);
 
   // Open on the nearest camera that is actually showing a picture, unless the
@@ -718,6 +735,7 @@ export function Cameras() {
           key={cam.id}
           cam={cam}
           fallback={nextLive ? { label: nextLive.label, onClick: () => choose(nextLive.key) } : undefined}
+          onLiveChange={setInlineLive}
         />
       ) : (
         <IslandView />
@@ -725,7 +743,7 @@ export function Cameras() {
 
       <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
         {caption}
-        {cam && (
+        {cam && !inlineLive && (
           <>
             {" "}
             Camera:{" "}
