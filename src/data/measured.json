@@ -1,8 +1,8 @@
 {
-  "generatedAt": "2026-10-11T12:00:22.863Z",
-  "samples": 4372,
+  "generatedAt": "2026-10-11T12:30:25.018Z",
+  "samples": 4374,
   "firstAt": "2026-06-07T21:31:46.150Z",
-  "lastAt": "2026-10-11T12:00:22.482Z",
+  "lastAt": "2026-10-11T12:30:24.624Z",
   "route": "Surf City <-> Harris Teeter (Hampstead), across the Surf City bridge",
   "out": {
     "0": {
@@ -40,7 +40,7 @@
       },
       "8": {
         "min": 10,
-        "n": 18
+        "n": 19
       },
       "9": {
         "min": 11,
@@ -728,7 +728,7 @@
       },
       "8": {
         "min": 11,
-        "n": 18
+        "n": 19
       },
       "9": {
         "min": 12,
