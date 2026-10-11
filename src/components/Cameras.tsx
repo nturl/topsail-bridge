@@ -58,7 +58,7 @@ function CamPlaceholder({
 }) {
   return (
     <div
-      className="relative flex aspect-video w-full flex-col items-center justify-center gap-2 overflow-hidden rounded-2xl px-4 text-center"
+      className="relative flex aspect-video w-full flex-col items-center justify-center gap-2 rounded-2xl px-4 py-4 text-center"
       style={{ background: "linear-gradient(160deg,#38bdf8,#0369a1)" }}
     >
       <div className={pulse ? "animate-pulse" : ""}>
@@ -91,10 +91,22 @@ function SurfchexLink() {
   );
 }
 
-// Island roundabout: live HLS video. Prefer hls.js wherever it's supported
-// (Chrome/Edge/Firefox/Dia); only fall back to native HLS on Safari/iOS, since
-// Chromium reports a misleading canPlayType("maybe") it can't actually decode.
-function IslandVideo({ src, isSurfchex }: { src: string; isSurfchex: boolean }) {
+// Live HLS video: the island roundabout and NCDOT's open (no-auth) streams.
+// Prefer hls.js wherever it's supported (Chrome/Edge/Firefox/Dia); only fall
+// back to native HLS on Safari/iOS, since Chromium reports a misleading
+// canPlayType("maybe") it can't actually decode. With onFail, an outage hands
+// off to the caller (NCDOT: the DriveNC map) instead of retrying in place.
+function LiveVideo({
+  src,
+  isSurfchex = false,
+  poster,
+  onFail,
+}: {
+  src: string;
+  isSurfchex?: boolean;
+  poster?: string;
+  onFail?: () => void;
+}) {
   const ref = useRef<HTMLVideoElement>(null);
   // "starting" until frames actually move; "live" only while they keep moving.
   const [status, setStatus] = useState<"starting" | "live" | "offline" | "blocked">("starting");
@@ -261,9 +273,14 @@ function IslandVideo({ src, isSurfchex }: { src: string; isSurfchex: boolean }) 
       else if (frozenFor > STALL_HEAL_MS && now - lastHealAt.current > HEAL_COOLDOWN_MS) heal();
     };
 
-    // Backgrounded tabs get throttled and come back arbitrarily far behind.
+    // Hidden tabs pause rather than keep pulling video nobody sees; they come
+    // back behind the live edge, so returning heals (seek forward + play).
     const onReturn = () => {
-      if (document.visibilityState !== "visible" || statusRef.current !== "live") return;
+      if (document.visibilityState === "hidden") {
+        video.pause();
+        return;
+      }
+      if (statusRef.current !== "live") return;
       lastTime.current = video.currentTime;
       lastProgressAt.current = Date.now();
       if (video.error || video.readyState === 0) rebuild();
@@ -280,9 +297,13 @@ function IslandVideo({ src, isSurfchex }: { src: string; isSurfchex: boolean }) 
     };
   }, [rebuild]);
 
+  useEffect(() => {
+    if (status === "offline") onFail?.();
+  }, [status, onFail]);
+
   // Once down, retry on a widening backoff rather than a flat interval.
   useEffect(() => {
-    if (status !== "offline") return;
+    if (status !== "offline" || onFail) return;
     const id = setTimeout(
       () => {
         retries.current += 1;
@@ -292,7 +313,7 @@ function IslandVideo({ src, isSurfchex }: { src: string; isSurfchex: boolean }) 
       RETRY_BACKOFF_MS[Math.min(retries.current, RETRY_BACKOFF_MS.length - 1)],
     );
     return () => clearTimeout(id);
-  }, [status]);
+  }, [status, onFail]);
 
   // Not an outage: Surfchex serves their promo slate to off-site players, so
   // retrying won't help. Send people to the source instead of looping their ad.
@@ -300,7 +321,7 @@ function IslandVideo({ src, isSurfchex }: { src: string; isSurfchex: boolean }) 
     return <SurfchexLink />;
   }
 
-  if (status === "offline") {
+  if (status === "offline" && !onFail) {
     return (
       <CamPlaceholder
         title="Camera is down right now"
@@ -318,6 +339,7 @@ function IslandVideo({ src, isSurfchex }: { src: string; isSurfchex: boolean }) 
         muted
         autoPlay
         playsInline
+        poster={poster}
         className="aspect-video w-full object-cover"
         onClick={() => ref.current?.play()}
       />
@@ -460,6 +482,16 @@ function Lightbox({ src, alt, onClose }: { src: string; alt: string; onClose: ()
 // Live video through NCDOT's own embeddable DriveNC map, loaded only when asked
 // for (the frame brings Google Maps and NCDOT's Google Analytics with it).
 function LiveMap({ cam, onClose }: { cam: NcdotCam; onClose: () => void }) {
+  const frame = useRef<HTMLIFrameElement>(null);
+  const [touched, setTouched] = useState(false);
+  // A cross-origin frame can't be clicked or read from here, but tapping into
+  // it moves focus to it, which blurs our window. That's the cue to drop the
+  // target before it sits on top of DriveNC's video popup.
+  useEffect(() => {
+    const onBlur = () => setTimeout(() => document.activeElement === frame.current && setTouched(true), 0);
+    window.addEventListener("blur", onBlur);
+    return () => window.removeEventListener("blur", onBlur);
+  }, []);
   return (
     <div className="overflow-hidden rounded-2xl border border-slate-200 dark:border-white/10">
       <div className="flex items-center justify-between gap-3 bg-slate-50 px-3 py-2 text-xs dark:bg-slate-800">
@@ -475,15 +507,58 @@ function LiveMap({ cam, onClose }: { cam: NcdotCam; onClose: () => void }) {
           Back to snapshot
         </button>
       </div>
-      <iframe
-        title={`NCDOT DriveNC live camera map at ${cam.label}`}
-        src={liveMapUrl(cam)}
-        className="block h-[460px] w-full border-0 sm:h-[540px]"
-        allow="fullscreen; autoplay"
-        allowFullScreen
-      />
+      <div className="relative">
+        <iframe
+          ref={frame}
+          title={`NCDOT DriveNC live camera map at ${cam.label}`}
+          src={liveMapUrl(cam)}
+          className="block h-[460px] w-full border-0 sm:h-[540px]"
+          allow="fullscreen; autoplay"
+          allowFullScreen
+        />
+        {/* The map centers on the camera's coordinates and the pin's head
+            sits about 32 px above that point. */}
+        {!touched && (
+          <span
+            aria-hidden
+            className="pointer-events-none absolute left-1/2 top-[calc(50%-32px)] h-12 w-12 -translate-x-1/2 -translate-y-1/2"
+          >
+            <span className="absolute inset-0 animate-ping rounded-full border-[3px] border-rose-500/80" />
+            <span className="absolute inset-1.5 rounded-full border-2 border-rose-500" />
+          </span>
+        )}
+      </div>
       <p className="bg-slate-50 px-3 py-1.5 text-[11px] text-slate-500 dark:bg-slate-800 dark:text-slate-400">
         NCDOT&apos;s DriveNC map, embedded as NCDOT offers it. It loads Google Maps and Google Analytics.
+      </p>
+    </div>
+  );
+}
+
+const VIDEO_DISCLAIMER =
+  "Live traffic camera video is provided by NCDOT for general travel information only and may be delayed, unavailable, or inaccurate. NCDOT does not guarantee the video’s accuracy or suitability for any other use.";
+
+// One tap, video in our own card: only for NCDOT streams served without auth.
+// If the stream won't play (blocked port, 401, outage), drop to the map.
+function InlineLive({ cam, poster, onFail, onClose }: { cam: NcdotCam & { hls: string }; poster?: string; onFail: () => void; onClose: () => void }) {
+  return (
+    <div>
+      <div className="relative">
+        <LiveVideo src={cam.hls} poster={poster} onFail={onFail} />
+        <button
+          type="button"
+          onClick={onClose}
+          className="pressable absolute bottom-2 right-2 rounded-full bg-white/95 px-3 py-1.5 text-xs font-semibold text-slate-900 shadow-lg hover:bg-white"
+        >
+          Back to snapshot
+        </button>
+      </div>
+      <p className="mt-1.5 text-[11px] leading-snug text-slate-500 dark:text-slate-400">
+        Live video:{" "}
+        <a href={DRIVENC} target="_blank" rel="noreferrer" className="underline-offset-2 hover:underline">
+          NCDOT via DriveNC
+        </a>
+        . {VIDEO_DISCLAIMER}
       </p>
     </div>
   );
@@ -492,10 +567,18 @@ function LiveMap({ cam, onClose }: { cam: NcdotCam; onClose: () => void }) {
 function NcdotSnapshot({ cam, fallback }: { cam: NcdotCam; fallback?: { label: string; onClick: () => void } }) {
   const state = useSnapshot(cam.id);
   const [zoom, setZoom] = useState(false);
-  const [live, setLive] = useState(false);
+  const [live, setLive] = useState<null | "video" | "map">(null);
   const close = useCallback(() => setZoom(false), []);
+  const toMap = useCallback(() => {
+    track("cam_live_fallback", { cam: cam.id });
+    setLive("map");
+  }, [cam.id]);
 
-  if (live) return <LiveMap cam={cam} onClose={() => setLive(false)} />;
+  if (live === "video" && cam.hls) {
+    const poster = typeof state === "object" ? state.url : undefined;
+    return <InlineLive cam={{ ...cam, hls: cam.hls }} poster={poster} onFail={toMap} onClose={() => setLive(null)} />;
+  }
+  if (live) return <LiveMap cam={cam} onClose={() => setLive(null)} />;
 
   if (state === "loading") {
     return <CamPlaceholder pulse subtitle="Loading camera view…" />;
@@ -551,8 +634,8 @@ function NcdotSnapshot({ cam, fallback }: { cam: NcdotCam; fallback?: { label: s
       <button
         type="button"
         onClick={() => {
-          track("cam_live", { cam: cam.id });
-          setLive(true);
+          track("cam_live", { cam: cam.id, mode: cam.hls ? "inline" : "map" });
+          setLive(cam.hls ? "video" : "map");
         }}
         className="pressable absolute bottom-2 right-2 inline-flex items-center gap-1.5 rounded-full bg-white/95 px-3 py-1.5 text-xs font-semibold text-slate-900 shadow-lg hover:bg-white"
       >
@@ -566,7 +649,7 @@ function NcdotSnapshot({ cam, fallback }: { cam: NcdotCam; fallback?: { label: s
 
 function IslandView() {
   return ISLAND_CAMERA_MODE !== "link" ? (
-    <IslandVideo src={ISLAND_HLS} isSurfchex={ISLAND_CAMERA_MODE === "surfchex"} />
+    <LiveVideo src={ISLAND_HLS} isSurfchex={ISLAND_CAMERA_MODE === "surfchex"} />
   ) : (
     <SurfchexLink />
   );
