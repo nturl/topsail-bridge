@@ -38,7 +38,9 @@ Live video ("Watch live") takes one of two paths:
   `src/components/Cameras.tsx`: hls.js, native HLS on Safari, with the snapshot
   as poster, a LIVE badge, and the stall watchdog). The card credits "NCDOT via
   DriveNC" and shows NCDOT's Live Traffic Video Disclaimer verbatim (from
-  drivenc.gov/about/disclaimer). Hidden tabs pause the stream. If it fails to
+  drivenc.gov/about/disclaimer); while the player is on screen the caption's own
+  "Camera: NCDOT via DriveNC" credit is dropped so the attribution shows once.
+  Hidden tabs pause the stream. If it fails to
   start (blocked port, 401, outage), the card drops to the DriveNC map below.
   As of 2026-10-11 only 6141 Porters Neck is open; the stream is CORS-open
   fMP4 HLS on `cfsse08.services.ncdot.gov:8887`. Decided by Noel 2026-10-11,
