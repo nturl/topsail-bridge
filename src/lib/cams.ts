@@ -1,9 +1,9 @@
 // NCDOT DriveNC snapshot cameras on the routes to the island, nearest the
 // bridge first (locations checked against OpenStreetMap). Shared by the
 // /api/cam proxy (as its allowlist), the /api/cams health check, and the
-// camera UI. Snapshots only: NCDOT's terms allow
-// unaltered non-commercial reuse of the images; live video plays through
-// NCDOT's own embeddable map (liveMapUrl), never by pulling their streams.
+// camera UI. NCDOT's terms allow unaltered non-commercial reuse of the
+// images. Live video: a cam with an open stream (`hls`) plays in our own
+// player; the rest play through NCDOT's own embeddable map (liveMapUrl).
 export type NcdotCam = {
   key: string;
   id: string;
@@ -12,6 +12,9 @@ export type NcdotCam = {
   alt: string;
   lat: number;
   lng: number;
+  // Only streams DriveNC serves without auth (data-videoauth="false" on its
+  // camera). Gated streams need a DriveNC session token: never replay one.
+  hls?: string;
 };
 
 export const NCDOT_CAMS: NcdotCam[] = [
@@ -41,6 +44,7 @@ export const NCDOT_CAMS: NcdotCam[] = [
     alt: "US-17 at Porters Neck, the approach to Topsail Island from Wilmington",
     lat: 34.30164,
     lng: -77.78769,
+    hls: "https://cfsse08.services.ncdot.gov:8887/chan-6637_l/index.m3u8",
   },
   {
     key: "ogden",

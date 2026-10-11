@@ -30,13 +30,32 @@ otherwise. Keep the DriveNC attribution and revisit permission before adding
 advertising or other commercial use. See the
 [NCDOT terms of use](https://www.ncdot.gov/about-us/how-we-operate/policy-process/Pages/terms-use.aspx).
 
-Live video: "Watch live" on each camera opens NCDOT's own embeddable DriveNC
-map (`liveMapUrl` in `src/lib/cams.ts`, from drivenc.gov/map/embeddedmapsetup),
-centered on that camera with only the cameras layer. Tapping the pin, then Show
-Video, plays NCDOT's live stream inside DriveNC's frame, including the
-auth-gated cams (verified 2026-10-09 on 6157). The frame loads only on tap
-because it brings Google Maps and NCDOT's Google Analytics. Never pull the HLS
-streams directly: DriveNC gates most of them and nothing grants that use.
+Live video ("Watch live") takes one of two paths:
+
+- **Open streams play in our own player.** A camera whose DriveNC stream needs
+  no auth (`data-videoauth="false"`) carries its manifest as `hls` in
+  `src/lib/cams.ts`, and one tap plays it inline (`LiveVideo` in
+  `src/components/Cameras.tsx`: hls.js, native HLS on Safari, with the snapshot
+  as poster, a LIVE badge, and the stall watchdog). The card credits "NCDOT via
+  DriveNC" and shows NCDOT's Live Traffic Video Disclaimer verbatim (from
+  drivenc.gov/about/disclaimer). Hidden tabs pause the stream. If it fails to
+  start (blocked port, 401, outage), the card drops to the DriveNC map below.
+  As of 2026-10-11 only 6141 Porters Neck is open; the stream is CORS-open
+  fMP4 HLS on `cfsse08.services.ncdot.gov:8887`. Decided by Noel 2026-10-11,
+  ahead of NCDOT's reply to the permission email.
+- **Gated streams play through NCDOT's own map.** For the rest (5400, 6157,
+  4781, 6116), the card opens NCDOT's embeddable DriveNC map (`liveMapUrl`,
+  from drivenc.gov/map/embeddedmapsetup), centered on the camera with only the
+  cameras layer, and a pulsing ring marks the pin (about 32 px above frame
+  center, `pointer-events: none`, gone once the visitor taps into the frame).
+  Tapping the pin, then Show Video, plays the stream inside DriveNC's frame.
+  The embed has no camera-select parameter and a cross-origin frame can't be
+  clicked from our page, so the ring is the most we can do. The frame loads
+  only on tap because it brings Google Maps and NCDOT's Google Analytics.
+
+Never replay a gated stream: those need a token from DriveNC's same-origin
+`/Camera/GetVideoUrl`, and nothing grants that use. If NCDOT says yes to the
+permission email, gated cams can move to the inline player.
 
 DriveNC's robots.txt disallows `/List/GetData/` and `/map/map*/`. The app only
 fetches `/map/Cctv/<id>` snapshots; don't build on the list endpoints. The
