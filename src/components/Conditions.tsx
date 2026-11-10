@@ -3,15 +3,25 @@
 import Link from "next/link";
 import { Cameras } from "./Cameras";
 import { wmoLabel } from "@/lib/context";
-import type { ConditionsData } from "@/lib/types";
+import type { ConditionsData, Sun } from "@/lib/types";
 
-// Mornings care about sunrise, the rest of the day about sunset.
-function etHour(): number {
-  return Number(
-    new Intl.DateTimeFormat("en-US", { timeZone: "America/New_York", hour: "2-digit", hourCycle: "h23" }).format(
-      new Date(),
-    ),
-  );
+// Now in Eastern as "HH:mm", comparable as a string with Sun.sunsetHm.
+function etClock(): string {
+  return new Intl.DateTimeFormat("en-GB", {
+    timeZone: "America/New_York",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  }).format(new Date());
+}
+
+// Mornings care about sunrise, the day about sunset, and once the sun is down
+// the next useful fact is tomorrow's sunrise.
+function sunChip(sun: Sun): string {
+  const now = etClock();
+  if (now < "11:00") return `Sunrise ${sun.sunriseClock}`;
+  if (sun.sunsetHm && sun.nextSunriseClock && now >= sun.sunsetHm) return `Sunrise ${sun.nextSunriseClock}`;
+  return `Sunset ${sun.sunsetClock}`;
 }
 
 // Official pages only: parking rates differ between sources, so link rather than quote.
@@ -39,7 +49,7 @@ export function Conditions({ data }: { data: ConditionsData | null }) {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h2 className="text-[11px] font-medium uppercase tracking-[0.08em] text-slate-400">On the bridge now</h2>
-        <Link href="/cams" className="text-xs font-medium text-sky-700 hover:underline dark:text-sky-400">
+        <Link href="/cams" className="-my-3.5 py-3.5 text-xs font-medium text-sky-700 hover:underline dark:text-sky-400">
           All cams →
         </Link>
       </div>
@@ -100,7 +110,7 @@ export function Conditions({ data }: { data: ConditionsData | null }) {
         ))}
         {data?.sun && (
           <span className="rounded-full bg-slate-100 px-2.5 py-1 text-slate-700 dark:bg-slate-800 dark:text-slate-300">
-            {etHour() < 11 ? `Sunrise ${data.sun.sunriseClock}` : `Sunset ${data.sun.sunsetClock}`}
+            {sunChip(data.sun)}
           </span>
         )}
       </div>

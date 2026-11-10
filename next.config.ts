@@ -10,6 +10,22 @@ const nextConfig: NextConfig = {
   },
   outputFileTracingRoot: here,
   // topsail.live is a short alias; topsailtraffic.com is canonical.
+  // Baseline hardening. No Content-Security-Policy on purpose: Next's inline
+  // scripts, HLS blob playback, the DriveNC map iframe and Pulse would each
+  // need an allowance, and a wrong one breaks the cams.
+  async headers() {
+    return [
+      {
+        source: "/:path*",
+        headers: [
+          { key: "X-Content-Type-Options", value: "nosniff" },
+          { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
+          { key: "X-Frame-Options", value: "SAMEORIGIN" },
+          { key: "Permissions-Policy", value: "camera=(), microphone=()" },
+        ],
+      },
+    ];
+  },
   async redirects() {
     return [
       {

@@ -195,7 +195,7 @@ export function Heatmap({ data, dir }: { data: HistoryData | null; dir: "out" | 
             const isNow = dow === now.dow && h === now.hod;
             const isSel = !!sel && sel.dow === dow && sel.hod === h;
             const pos = { gridColumn: dow + 2, gridRow: r + 2 };
-            if (!c) return <div key={k} aria-hidden className="h-5 rounded-[3px] bg-slate-100 dark:bg-slate-800" style={pos} />;
+            if (!c) return <div key={k} aria-hidden className="h-6 rounded-[3px] bg-slate-100 dark:bg-slate-800" style={pos} />;
             return (
               <button
                 key={k}
@@ -205,7 +205,7 @@ export function Heatmap({ data, dir }: { data: HistoryData | null; dir: "out" | 
                 aria-pressed={isSel}
                 aria-label={`${DAY_NAMES[dow]} ${hourLabel(h)}: ${c.minutes} minutes, ${c.source === "actual" ? "measured" : "predicted"}${isNow ? ", now" : ""}`}
                 onClick={() => setSel(isSel ? null : c)}
-                className={`relative h-5 rounded-[3px] focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-sky-600 ${
+                className={`relative h-6 rounded-[3px] focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-sky-600 ${
                   isSel
                     ? "ring-2 ring-slate-900 ring-offset-1 dark:ring-white dark:ring-offset-slate-900"
                     : isNow

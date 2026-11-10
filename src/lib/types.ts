@@ -63,7 +63,9 @@ export type StormWatch = { name: string; kind: string; miles: number; url: strin
 
 export type TideEvent = { type: "high" | "low"; clock: string }; // next events, chronological
 
-export type Sun = { sunriseClock: string; sunsetClock: string };
+// sunsetHm ("17:08", Eastern) and nextSunriseClock are optional: a payload
+// cached by an older service worker won't have them.
+export type Sun = { sunriseClock: string; sunsetClock: string; sunsetHm?: string; nextSunriseClock?: string };
 
 export type ConditionsData = {
   incidents: Incident[];
