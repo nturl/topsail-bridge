@@ -1,9 +1,9 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import bundledMeasured from "@/data/measured.json";
 import { heatColor, heatScale, hourLabel } from "@/lib/heat";
 import { PageHeader } from "@/components/PageHeader";
 import { TipJar } from "@/components/TipJar";
+import { HOURS, baseline, fmtDate, loadMeasured, median, type Grid } from "@/lib/measured";
 
 export const metadata: Metadata = {
   title: "Best Time to Leave (and Get to) Topsail Island: Measured, Not Guessed",
@@ -17,27 +17,10 @@ export const metadata: Metadata = {
   },
 };
 
-const HOURS = Array.from({ length: 16 }, (_, i) => i + 6); // 6a..9p
 const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
-type Grid = Record<string, Record<string, { min: number; n: number }>>;
-type Measured = { samples: number; firstAt: string; lastAt: string; out: Grid; back: Grid };
-
-// The poll workflow refreshes measured.json in the repo several times a day,
-// but this site only redeploys by hand. Read it live (hourly) so the page keeps
-// up, and fall back to the copy bundled at build time.
+// measured.json is read live, hourly (see loadMeasured).
 export const revalidate = 3600;
-const MEASURED_RAW = "https://raw.githubusercontent.com/nturl/topsail-bridge/main/src/data/measured.json";
-
-async function loadMeasured(): Promise<Measured> {
-  try {
-    const r = await fetch(MEASURED_RAW, { next: { revalidate: 3600 }, signal: AbortSignal.timeout(8000) });
-    if (r.ok) return (await r.json()) as Measured;
-  } catch {
-    /* fall through */
-  }
-  return bundledMeasured as Measured;
-}
 
 function cellsOf(grid: Grid): number[] {
   const out: number[] = [];
@@ -46,25 +29,6 @@ function cellsOf(grid: Grid): number[] {
     if (c) out.push(c.min);
   }
   return out;
-}
-
-function median(a: number[]): number {
-  const s = [...a].sort((x, y) => x - y);
-  const m = Math.floor(s.length / 2);
-  return s.length % 2 ? s[m] : Math.round((s[m - 1] + s[m]) / 2);
-}
-
-// Off-peak baseline: everything before 9am and from 6pm on, across both directions.
-function baseline(measured: Measured): number {
-  const vals: number[] = [];
-  for (const grid of [measured.out, measured.back]) {
-    for (let d = 0; d < 7; d++) for (const h of HOURS) {
-      if (h >= 9 && h < 18) continue;
-      const c = grid[String(d)]?.[String(h)];
-      if (c) vals.push(c.min);
-    }
-  }
-  return median(vals);
 }
 
 function peak(grid: Grid, dow: number, from: number, to: number): { min: number; hod: number } {
@@ -104,10 +68,6 @@ const CROSS_BY_ROWS = [
   { label: "Sunday", days: [0] },
   { label: "Mon to Thu", days: [1, 2, 3, 4] },
 ];
-
-function fmtDate(iso: string): string {
-  return new Date(iso).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric", timeZone: "America/New_York" });
-}
 
 const CARD =
   "rounded-3xl border border-slate-200/70 bg-white p-5 shadow-[0_1px_2px_rgba(2,6,23,0.04),0_16px_40px_-24px_rgba(2,6,23,0.25)] dark:border-white/10 dark:bg-slate-900 dark:shadow-[0_16px_40px_-24px_rgba(0,0,0,0.8)]";

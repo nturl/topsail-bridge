@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { LngLat } from "@/lib/types";
 import { coordParam } from "@/lib/geo";
 
@@ -10,14 +10,15 @@ import { coordParam } from "@/lib/geo";
 const MAP_WINDOW_MS = 600_000;
 
 export function RouteMap({ origin, dest }: { origin: LngLat; dest: LngLat }) {
-  const [dark, setDark] = useState(false);
   const [tick, setTick] = useState(0);
+  const mountTick = useRef(0);
   const [mapsHref, setMapsHref] = useState<string | null>(null);
 
   useEffect(() => {
-    setDark(!!window.matchMedia?.("(prefers-color-scheme: dark)").matches);
+    // The first image is the plain, CDN-shared URL already in the HTML; only a
+    // later 10-minute window adds the cache-buster, so the map isn't fetched twice.
+    mountTick.current = Math.floor(Date.now() / MAP_WINDOW_MS);
     const update = () => setTick(Math.floor(Date.now() / MAP_WINDOW_MS));
-    update();
     const id = setInterval(() => {
       if (document.visibilityState === "visible") update();
     }, 60_000);
@@ -40,18 +41,23 @@ export function RouteMap({ origin, dest }: { origin: LngLat; dest: LngLat }) {
     );
   }, [origin, dest]);
 
-  const src = `/api/staticmap?o=${coordParam(origin)}&d=${coordParam(dest)}${dark ? "&dark=1" : ""}${
-    tick ? `&t=${tick}` : ""
-  }`;
+  const bust = tick && tick !== mountTick.current ? `&t=${tick}` : "";
+  const base = `/api/staticmap?o=${coordParam(origin)}&d=${coordParam(dest)}`;
 
   return (
     <div>
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img
-        src={src}
-        alt="Driving route over the Surf City bridge, with live traffic shown in amber and red"
-        className="aspect-[2/1] w-full rounded-2xl bg-slate-100 object-cover dark:bg-slate-800"
-      />
+      {/* <picture> picks the dark map in CSS, so dark mode never loads both. */}
+      <picture>
+        <source media="(prefers-color-scheme: dark)" srcSet={`${base}&dark=1${bust}`} />
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={`${base}${bust}`}
+          alt="Driving route over the Surf City bridge, with live traffic shown in amber and red"
+          loading="lazy"
+          decoding="async"
+          className="aspect-[2/1] w-full rounded-2xl bg-slate-100 object-cover dark:bg-slate-800"
+        />
+      </picture>
       <div className="mt-2 flex items-center justify-between gap-3 text-xs">
         <span className="text-slate-400">Slow traffic shows amber and red on the route.</span>
         {mapsHref && (

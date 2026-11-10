@@ -272,7 +272,7 @@ async function getTides(): Promise<TideEvent[] | null> {
 async function getWeatherSun(): Promise<{ weather: Weather; sun: Sun | null }> {
   try {
     const url =
-      "https://api.open-meteo.com/v1/forecast?latitude=34.43&longitude=-77.55&current=temperature_2m,precipitation,weather_code,wind_speed_10m,wind_gusts_10m&daily=sunrise,sunset&forecast_days=1&timezone=America%2FNew_York&temperature_unit=fahrenheit&wind_speed_unit=mph&precipitation_unit=inch";
+      "https://api.open-meteo.com/v1/forecast?latitude=34.43&longitude=-77.55&current=temperature_2m,precipitation,weather_code,wind_speed_10m,wind_gusts_10m&daily=sunrise,sunset&forecast_days=2&timezone=America%2FNew_York&temperature_unit=fahrenheit&wind_speed_unit=mph&precipitation_unit=inch";
     const r = await fetch(url, { next: { revalidate: 600 }, signal: AbortSignal.timeout(4000) });
     if (!r.ok) return { weather: null, sun: null };
     const j = (await r.json()) as {
@@ -291,8 +291,16 @@ async function getWeatherSun(): Promise<{ weather: Weather; sun: Sun | null }> {
       : null;
     const sunrise = j.daily?.sunrise?.[0];
     const sunset = j.daily?.sunset?.[0];
-    const sun =
-      sunrise && sunset ? { sunriseClock: chipClock(sunrise.slice(11)), sunsetClock: chipClock(sunset.slice(11)) } : null;
+    const nextSunrise = j.daily?.sunrise?.[1];
+    const sun: Sun | null =
+      sunrise && sunset
+        ? {
+            sunriseClock: chipClock(sunrise.slice(11)),
+            sunsetClock: chipClock(sunset.slice(11)),
+            sunsetHm: sunset.slice(11),
+            ...(nextSunrise ? { nextSunriseClock: chipClock(nextSunrise.slice(11)) } : {}),
+          }
+        : null;
     return { weather, sun };
   } catch {
     return { weather: null, sun: null };

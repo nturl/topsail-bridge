@@ -548,7 +548,7 @@ function InlineLive({ cam, poster, onFail, onClose }: { cam: NcdotCam & { hls: s
         <button
           type="button"
           onClick={onClose}
-          className="pressable absolute bottom-2 right-2 rounded-full bg-white/95 px-3 py-1.5 text-xs font-semibold text-slate-900 shadow-lg hover:bg-white"
+          className="pressable absolute bottom-2 right-2 inline-flex min-h-11 items-center rounded-full bg-white/95 px-3.5 py-1.5 text-xs font-semibold text-slate-900 shadow-lg hover:bg-white"
         >
           Back to snapshot
         </button>
@@ -653,7 +653,7 @@ function NcdotSnapshot({
           track("cam_live", { cam: cam.id, mode: cam.hls ? "inline" : "map" });
           setLive(cam.hls ? "video" : "map");
         }}
-        className="pressable absolute bottom-2 right-2 inline-flex items-center gap-1.5 rounded-full bg-white/95 px-3 py-1.5 text-xs font-semibold text-slate-900 shadow-lg hover:bg-white"
+        className="pressable absolute bottom-2 right-2 inline-flex min-h-11 items-center gap-1.5 rounded-full bg-white/95 px-3.5 py-1.5 text-xs font-semibold text-slate-900 shadow-lg hover:bg-white"
       >
         <span className="h-1.5 w-1.5 rounded-full bg-rose-500" aria-hidden />
         Watch live
@@ -713,7 +713,7 @@ export function Cameras() {
             aria-pressed={view === t.key}
             aria-label={t.live === false ? `${t.label} (camera down)` : t.label}
             onClick={() => choose(t.key)}
-            className={`pressable inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 transition-colors ${
+            className={`pressable inline-flex min-h-11 items-center gap-1.5 rounded-full border px-3.5 py-1.5 transition-colors ${
               view === t.key
                 ? "border-slate-900 bg-slate-900 text-white dark:border-white dark:bg-white dark:text-slate-900"
                 : "border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:text-slate-900 dark:border-white/10 dark:bg-slate-900 dark:text-slate-300 dark:hover:text-white"

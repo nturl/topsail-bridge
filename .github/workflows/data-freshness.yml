@@ -1,8 +1,10 @@
 name: data-freshness
 
 # Dead-man check for the poller: fails (and GitHub emails the repo owner) when
-# the newest reading in data/log.ndjson is more than 6 hours old, so a stalled
-# schedule is noticed in a day instead of weeks.
+# the newest reading in data/log.ndjson is more than 6 hours old, or when fewer
+# than 20 polls landed in the last 24 hours. The second check catches the
+# Vercel-cron dispatch dying (a revoked token): GitHub's own throttled schedule
+# still lands a few runs a day, which keeps the newest reading under 6 hours.
 on:
   schedule:
     - cron: "23 13 * * *"
@@ -20,5 +22,16 @@ jobs:
           echo "newest reading: $last ($((age / 60)) min ago)"
           if [ "$age" -gt 21600 ]; then
             echo "::error::No traffic reading for $((age / 3600)) hours. The poll-traffic schedule has stalled."
+            exit 1
+          fi
+      - name: Enough polls in the last 24 hours
+        run: |
+          # Each poll writes two lines (out and back) with the same "at";
+          # ISO timestamps compare correctly as strings.
+          since=$(date -u -d '24 hours ago' +%FT%T)
+          polls=$(tail -n 400 data/log.ndjson | sed -E 's/.*"at":"([^"]+)".*/\1/' | sort -u | awk -v s="$since" '$0 >= s' | wc -l)
+          echo "polls in the last 24 hours: $polls (expected about 48)"
+          if [ "$polls" -lt 20 ]; then
+            echo "::error::Only $polls polls in the last 24 hours. The Vercel cron dispatch (/api/cron/poll, GITHUB_DISPATCH_TOKEN) has probably stopped."
             exit 1
           fi

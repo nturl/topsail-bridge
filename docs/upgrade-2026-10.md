@@ -74,3 +74,34 @@ growth, followed by this build. What shipped and what still needs the owner.
 - TomTom bridge-segment speeds: check storage terms before logging to a public repo.
 - North Topsail (NC-210) second measured route: cheap to poll, but needs a UI decision.
 - Dated notices file (e.g. the roundabout signal pilot): needs a current source.
+
+## November 2026 audit
+
+Shipped 2026-11-10:
+
+- **Dead-man check counts polls.** `data-freshness` also fails under 20 polls
+  in 24 hours. The 6-hour check alone missed the dispatch token dying, because
+  GitHub's throttled schedule still lands about three runs a day.
+- **Route map loads once.** The first image is the plain CDN-shared URL (the
+  cache-buster only applies from the next 10-minute window), dark mode is
+  picked with `<picture>`, and the image is lazy.
+- **Numbers in the home page HTML.** `/` is a server page (hourly) that passes
+  a measured summary line to the client `HomePage`; shared helpers live in
+  `src/lib/measured.ts`.
+- **Tap targets.** Cam chips, Watch live, the direction toggle, header pills
+  and the planner chips are 44 px tall; heatmap cells are 24 px.
+- **Sun chip.** After sunset it shows tomorrow's sunrise.
+- **Headers.** `X-Content-Type-Options`, `Referrer-Policy`, `X-Frame-Options`,
+  `Permissions-Policy`. No CSP (see `next.config.ts`).
+
+Needs the owner:
+
+- **`GITHUB_DISPATCH_TOKEN` is dead.** Since 2026-11-09 17:00 UTC
+  `/api/cron/poll` answers `{"status":"dispatch failed","code":401}` and the
+  log gets about 3 readings a day instead of 48. Create a new fine-grained PAT
+  (repo nturl/topsail-bridge only, Actions read/write), then
+  `vercel env rm GITHUB_DISPATCH_TOKEN production` and
+  `vercel env add GITHUB_DISPATCH_TOKEN production`, and redeploy.
+- **Optional: `CRON_SECRET`.** Unset today, so anyone can call the endpoint
+  (the 25-minute guard makes that harmless). Vercel Cron sends it automatically
+  once it exists.

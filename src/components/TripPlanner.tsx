@@ -212,7 +212,7 @@ export function TripPlanner({
   const anyPast = bars.some((b) => b.past && b.cell);
 
   const chip = (active: boolean) =>
-    `pressable rounded-full border px-3 py-1.5 text-xs font-medium transition-colors ${
+    `pressable inline-flex min-h-11 items-center rounded-full border px-3.5 py-1.5 text-xs font-medium transition-colors ${
       active
         ? "border-sky-600 bg-sky-50 text-sky-800 dark:border-sky-400 dark:bg-sky-950 dark:text-sky-200"
         : "border-slate-200 text-slate-600 hover:border-slate-300 dark:border-white/10 dark:text-slate-300"
