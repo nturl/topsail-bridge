@@ -1,0 +1,8 @@
+# Dev services for Amp orbs. Start them with: amp orb services ensure
+services:
+  web:
+    command: npm run dev -- --hostname 0.0.0.0 --port "$PORT"
+    portal:
+      url: /
+      title: Topsail Traffic (dev)
+      description: Dev build. Forecast, route map and geocoder stay empty unless MAPBOX_TOKEN is set in the project's Secrets & Env Vars.

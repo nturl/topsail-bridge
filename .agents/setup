@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+# Runs once when Amp prepares a new orb for this repo; the result is saved as a
+# snapshot that later threads start from. Keep it to installs. Do not start
+# servers here (those are declared in .amp/services.yaml).
+set -euo pipefail
+npm ci
